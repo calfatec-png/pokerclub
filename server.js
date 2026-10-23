@@ -407,6 +407,17 @@ function renderHtmlPage({ gameID, playerID, playerName }) {
         window.__AS_PLAYER = asParam;
       }
     } catch (e) {}
+
+    window.addEventListener('error', function(ev) {
+      console.error('CLIENT ERROR:', ev.error || ev.message);
+      try {
+        fetch('/api/client-error', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ message: ev.message, stack: ev.error ? ev.error.stack : null })
+        });
+      } catch(_) {}
+    });
   </script>
 </head>
 <body id="body">
@@ -428,10 +439,11 @@ function renderHtmlPage({ gameID, playerID, playerName }) {
         </div>
       </div>
       <div class="pc-dock-section">
-        <div class="pc-dock-title">Controle da Mesa & Bots</div>
+        <div class="pc-dock-title">Controle da Mesa & Fichas</div>
         <div class="pc-dock-row">
           <button class="pc-btn green" type="button" onclick="pcAction('add-bot')">🤖 +1 Bot</button>
           <button class="pc-btn green" type="button" onclick="pcAction('fill-bots', { count: 8 })">🤖 Preencher 8 Bots</button>
+          <button class="pc-btn gold" type="button" onclick="pcAction('add-chips')">💰 +$1,000 Fichas</button>
           <button class="pc-btn" type="button" onclick="pcAction('free-seat')">🪑 Liberar 1 Lugar</button>
           <button class="pc-btn danger" type="button" onclick="pcAction('remove-bots')">🗑️ Remover Bots</button>
           <button class="pc-btn green" type="button" onclick="pcAction('start-hand')">▶️ Iniciar / Próxima Mão</button>
@@ -928,6 +940,19 @@ const server = http.createServer(async (req, res) => {
         return;
       }
 
+      if (subAction === 'add-chips') {
+        const p = room.players[playerID];
+        if (p) {
+          const added = 1000;
+          p.stack = (p.stack || 0) + added;
+          if (p.status === 'standingUp') p.status = 'inGame';
+          room.updateLedger(playerID, p.name, added, 0);
+          room.broadcast();
+        }
+        sendJson(res, 200, { ok: true });
+        return;
+      }
+
       if (subAction === 'remove-bots') {
         room.removeBots();
         sendJson(res, 200, { ok: true });
@@ -952,6 +977,13 @@ const server = http.createServer(async (req, res) => {
         sendJson(res, 200, { ok: true });
         return;
       }
+    }
+
+    if (method === 'POST' && pathname === '/api/client-error') {
+      const body = await readJsonBody(req);
+      console.error('⚠️ [CLIENT JS ERROR REPORTED]:', JSON.stringify(body));
+      sendJson(res, 200, { ok: true }, extraHeaders);
+      return;
     }
 
     // Fallback for any other /api/* or /games/* POST/GET

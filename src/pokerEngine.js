@@ -581,16 +581,12 @@ class PokerGameRoom {
         p.status = 'inGame';
       }
       if (p.stack <= 0) {
-        if (p.isBot) {
-          // Auto-rebuy bots so live tables keep running!
-          const rebuyAmt = this.bigBlind * 100;
-          p.stack = rebuyAmt;
-          p.quitCount = (p.quitCount || 0) + 1;
-          p.status = 'inGame';
-          this.updateLedger(pid, p.name, rebuyAmt, 0);
-        } else {
-          p.status = 'standingUp';
-        }
+        // Auto-rebuy so hands keep running smoothly
+        const rebuyAmt = this.bigBlind * 100;
+        p.stack = rebuyAmt;
+        p.quitCount = (p.quitCount || 0) + 1;
+        p.status = 'inGame';
+        this.updateLedger(pid, p.name, rebuyAmt, 0);
       }
     }
 
@@ -605,6 +601,8 @@ class PokerGameRoom {
       this.pGS = {};
       this.tB = {};
       this.oTC = { '1': [] };
+      this.gameResult = null;
+      this.tHC = null;
       this.pITT = null;
       this.cPI = null;
       this.sNA = null;
@@ -1047,6 +1045,14 @@ class PokerGameRoom {
         gained
       }
     };
+    for (const pid of this.iHPI) {
+      if (pid !== winnerID && !this.gameResult[pid]) {
+        this.gameResult[pid] = {
+          '1': { position: 2, hC: [] },
+          gained: 0
+        };
+      }
+    }
 
     const waitMs = 3200;
     this.sNA = 'NSAGR';
