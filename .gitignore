@@ -1,3 +1,8 @@
 node_modules/
 *.log
 .DS_Store
+
+patch_bundle_safety.js
+scratch/
+scratch_test*.js
+test_reducers_exec.js
