@@ -48,10 +48,10 @@ function attachBroadcastHandler(room) {
 
 function seedDemoRooms() {
   // 1) Screenshot 2 & 3 Table: pglzUG33VPJwPc1fl6t6qNeE0
-  // Owner: teste, NLH ~ 10 / 20, Halloween 2026 theme, waiting for players
+  // NLH ~ 10 / 20, Halloween 2026 theme, waiting for players
   const room1 = new PokerGameRoom({
     id: 'pglzUG33VPJwPc1fl6t6qNeE0',
-    ownerID: DEFAULT_OWNER_ID,
+    ownerID: null,
     themeKey: 'halloween-2026',
     smallBlind: 10,
     bigBlind: 20,
@@ -59,18 +59,6 @@ function seedDemoRooms() {
     allowWaitlist: false,
     noOwner: false
   });
-  room1.players[DEFAULT_OWNER_ID] = {
-    id: DEFAULT_OWNER_ID,
-    name: 'teste',
-    status: 'watching',
-    winCount: 0,
-    quitCount: 0,
-    isNetworkPlayer: false,
-    stack: 0,
-    avatarID: null
-  };
-  room1.emojis[DEFAULT_OWNER_ID] = '😍';
-  room1.mEV = 1;
   attachBroadcastHandler(room1);
   rooms.set(room1.id, room1);
 
@@ -156,10 +144,11 @@ function getOrCreateRoom(gameID) {
   if (!rooms.has(gameID)) {
     const room = new PokerGameRoom({
       id: gameID,
-      ownerID: DEFAULT_OWNER_ID,
+      ownerID: null,
       themeKey: 'halloween-2026',
       smallBlind: 10,
-      bigBlind: 20
+      bigBlind: 20,
+      noOwner: false
     });
     attachBroadcastHandler(room);
     rooms.set(gameID, room);
@@ -272,6 +261,21 @@ function renderHtmlPage({ gameID, playerID, playerName }) {
     .card, .portrait .card, .card .value, .card .sub-suit {
       font-family: 'Montserrat', 'Helvetica Neue', Arial, sans-serif !important;
       font-style: normal !important;
+    }
+    /* Mobile / Touch protection for Action Buttons:
+       When it is NOT the player's turn (.game-decisions-ctn.low), disable clicks on the main
+       action buttons so tapping "Raise" on a phone before your turn never accidentally triggers
+       the adjacent "Check" button and auto-checks on your turn! */
+    .game-decisions-ctn.low .action-buttons,
+    .portrait .game-decisions-ctn.low .action-buttons {
+      opacity: 0.38 !important;
+      pointer-events: none !important;
+    }
+    .portrait .game-decisions-ctn .action-buttons {
+      gap: 0.35rem !important;
+    }
+    .portrait .game-decisions-ctn .action-button {
+      touch-action: manipulation;
     }
     /* Floating PokerClub Control Dock */
     #pc-helper-dock {
@@ -705,9 +709,180 @@ const server = http.createServer(async (req, res) => {
       }
       const resStart = room.startGame();
       if (!resStart.ok) {
-        sendJson(res, 422, { message: resStart.message }, extraHeaders);
+        sendJson(res, 422, { value: resStart.message, message: resStart.message }, extraHeaders);
         return;
       }
+      sendJson(res, 200, {}, extraHeaders);
+      return;
+    }
+
+    // GET /games/:id/spectators (Options -> Players tab requires an Array)
+    const spectatorsMatch = pathname.match(/^\/games\/([a-zA-Z0-9_-]+)\/spectators$/);
+    if (method === 'GET' && spectatorsMatch) {
+      const room = getOrCreateRoom(spectatorsMatch[1]);
+      const spectators = Object.values(room.players)
+        .filter(p => p && p.status === 'watching')
+        .map(p => ({ id: p.id, name: p.name || 'Guest', status: 'watching' }));
+      sendJson(res, 200, spectators, extraHeaders);
+      return;
+    }
+
+    // GET /games/:id/players/:playerID (Options -> Players -> Edit screen)
+    const getPlayerMatch = pathname.match(/^\/games\/([a-zA-Z0-9_-]+)\/players\/([a-zA-Z0-9_-]+)$/);
+    if (method === 'GET' && getPlayerMatch) {
+      const room = getOrCreateRoom(getPlayerMatch[1]);
+      const targetID = getPlayerMatch[2];
+      const p = room.players[targetID] || {
+        id: targetID,
+        name: 'Guest',
+        status: 'watching',
+        stack: 0
+      };
+      sendJson(
+        res,
+        200,
+        {
+          gamePlayer: p,
+          enqueuedChanged: (room.enqueuedStackChanges && room.enqueuedStackChanges[targetID]) || null
+        },
+        extraHeaders
+      );
+      return;
+    }
+
+    // POST /games/:id/update_player & /games/:id/approve_player (Owner adding/removing/setting player chips)
+    const updatePlayerMatch = pathname.match(/^\/games\/([a-zA-Z0-9_-]+)\/(update_player|approve_player)$/);
+    if (method === 'POST' && updatePlayerMatch) {
+      const room = getOrCreateRoom(updatePlayerMatch[1]);
+      const body = await readJsonBody(req);
+      const targetID = body.playerID;
+      const p = room.players[targetID];
+      if (!p) {
+        sendJson(res, 422, { stack: 'Player not found' }, extraHeaders);
+        return;
+      }
+      const mode = body.stackChangeMode || 'add';
+      const val = Math.round(Number(body.stackChange) || 0);
+      if (val <= 0 && mode !== 'set') {
+        sendJson(res, 422, { stack: 'Please enter a valid amount' }, extraHeaders);
+        return;
+      }
+
+      const inActiveHand =
+        room.status === 'inProgress' &&
+        room.iHPI.includes(targetID) &&
+        p.status === 'inGame' &&
+        room.pGS[targetID] !== 'fold';
+
+      if (inActiveHand) {
+        if (!room.enqueuedStackChanges) room.enqueuedStackChanges = {};
+        room.enqueuedStackChanges[targetID] = { stackChange: val, stackChangeMode: mode };
+      } else {
+        const oldStack = p.stack || 0;
+        let newStack = oldStack;
+        if (mode === 'add') newStack = oldStack + val;
+        else if (mode === 'remove') newStack = Math.max(0, oldStack - val);
+        else if (mode === 'set') newStack = Math.max(0, val);
+        const diff = newStack - oldStack;
+        p.stack = newStack;
+        if (diff > 0) room.updateLedger(targetID, p.name, diff, 0);
+        else if (diff < 0) room.updateLedger(targetID, p.name, 0, -diff);
+        if (p.stack > 0 && (p.status === 'standingUp' || p.status === 'requestedGameIngress')) {
+          p.status = room.status === 'inProgress' ? 'waitingNextGameToEnter' : 'inGame';
+        } else if (p.stack <= 0 && room.isPlayerSeated(targetID)) {
+          p.stack = 0;
+          p.status = 'standingUp';
+        }
+        room.addLog(`The stack of "${p.name} @ ${targetID}" was updated from ${oldStack} to ${newStack}.`);
+      }
+      room.ensureValidOwner();
+      room.syncAllLedgers();
+      room.broadcast();
+      sendJson(res, 200, {}, extraHeaders);
+      return;
+    }
+
+    // POST /games/:id/transfer_ownership
+    const transferOwnerMatch = pathname.match(/^\/games\/([a-zA-Z0-9_-]+)\/transfer_ownership$/);
+    if (method === 'POST' && transferOwnerMatch) {
+      const room = getOrCreateRoom(transferOwnerMatch[1]);
+      const body = await readJsonBody(req);
+      if (body.playerID && room.players[body.playerID]) {
+        room.ownerID = body.playerID;
+        room.broadcast();
+      }
+      sendJson(res, 200, {}, extraHeaders);
+      return;
+    }
+
+    // POST /games/:id/remove_player
+    const removePlayerMatch = pathname.match(/^\/games\/([a-zA-Z0-9_-]+)\/remove_player$/);
+    if (method === 'POST' && removePlayerMatch) {
+      const room = getOrCreateRoom(removePlayerMatch[1]);
+      const body = await readJsonBody(req);
+      if (body.playerID && room.players[body.playerID]) {
+        if (room.status === 'inProgress' && room.iHPI.includes(body.playerID) && room.pGS[body.playerID] !== 'fold') {
+          room.players[body.playerID].qNH = true;
+          room.broadcast();
+        } else {
+          room.removePlayerFromSeat(body.playerID);
+        }
+      }
+      sendJson(res, 200, {}, extraHeaders);
+      return;
+    }
+
+    // POST /games/:id/put_in_away_mode
+    const putAwayMatch = pathname.match(/^\/games\/([a-zA-Z0-9_-]+)\/put_in_away_mode$/);
+    if (method === 'POST' && putAwayMatch) {
+      const room = getOrCreateRoom(putAwayMatch[1]);
+      const body = await readJsonBody(req);
+      const target = body.playerID ? room.players[body.playerID] : null;
+      if (target) {
+        if (room.status === 'waiting' || !room.iHPI.includes(target.id) || room.pGS[target.id] === 'fold') {
+          target.status = 'standingUp';
+          target.sUNH = false;
+        } else {
+          target.sUNH = true;
+        }
+        room.broadcast();
+      }
+      sendJson(res, 200, {}, extraHeaders);
+      return;
+    }
+
+    // POST /games/:id/request_rebuy & POST /api/games/:id/request-add-on
+    const rebuyOrAddonMatch =
+      pathname.match(/^\/games\/([a-zA-Z0-9_-]+)\/request_rebuy$/) ||
+      pathname.match(/^\/api\/games\/([a-zA-Z0-9_-]+)\/request-add-on$/);
+    if (method === 'POST' && rebuyOrAddonMatch) {
+      const room = getOrCreateRoom(rebuyOrAddonMatch[1]);
+      const body = await readJsonBody(req);
+      const added = Math.round(Number(body.value) || 0);
+      const p = room.players[playerID];
+      if (!p || added <= 0) {
+        sendJson(res, 422, { value: 'Invalid amount', message: 'Invalid amount' }, extraHeaders);
+        return;
+      }
+      const inActiveHand =
+        room.status === 'inProgress' &&
+        room.iHPI.includes(playerID) &&
+        p.status === 'inGame' &&
+        room.pGS[playerID] !== 'fold';
+      if (inActiveHand) {
+        if (!room.enqueuedStackChanges) room.enqueuedStackChanges = {};
+        const prev = room.enqueuedStackChanges[playerID]?.stackChange || 0;
+        room.enqueuedStackChanges[playerID] = { stackChange: prev + added, stackChangeMode: 'add' };
+      } else {
+        p.stack = (p.stack || 0) + added;
+        room.updateLedger(playerID, p.name, added, 0);
+        if (p.status === 'standingUp') {
+          p.status = room.status === 'inProgress' ? 'waitingNextGameToEnter' : 'inGame';
+        }
+      }
+      room.ensureValidOwner();
+      room.syncAllLedgers();
+      room.broadcast();
       sendJson(res, 200, {}, extraHeaders);
       return;
     }
@@ -774,10 +949,14 @@ const server = http.createServer(async (req, res) => {
         const p = room.players[pid];
         if (!p) continue;
         if (change.stack !== undefined) {
-          const newStack = Number(change.stack);
+          const newStack = Math.max(0, Number(change.stack) || 0);
           const diff = newStack - (p.stack || 0);
           p.stack = newStack;
           if (diff > 0) room.updateLedger(pid, p.name, diff, 0);
+          else if (diff < 0) room.updateLedger(pid, p.name, 0, -diff);
+          if (p.stack > 0 && p.status === 'standingUp') {
+            p.status = room.status === 'inProgress' ? 'waitingNextGameToEnter' : 'inGame';
+          }
         }
         if (change.status === 'standingUp') {
           p.status = 'standingUp';
@@ -785,6 +964,8 @@ const server = http.createServer(async (req, res) => {
           room.removePlayerFromSeat(pid);
         }
       }
+      room.ensureValidOwner();
+      room.syncAllLedgers();
       room.broadcast();
       sendJson(res, 200, {}, extraHeaders);
       return;
@@ -799,7 +980,12 @@ const server = http.createServer(async (req, res) => {
       if (p && body.stack) {
         const added = Number(body.stack);
         p.stack = (p.stack || 0) + added;
+        if (p.stack > 0 && p.status === 'standingUp') {
+          p.status = room.status === 'inProgress' ? 'waitingNextGameToEnter' : 'inGame';
+        }
         room.updateLedger(playerID, p.name, added, 0);
+        room.ensureValidOwner();
+        room.syncAllLedgers();
         room.broadcast();
       }
       sendJson(res, 200, {}, extraHeaders);
@@ -1336,11 +1522,17 @@ function handleSocketIoEvent(client, eventName, data) {
         break;
 
       case 'PLAYER_SIT_BACK':
-        if (player) {
+        if (player && (player.stack || 0) > 0) {
           player.sUNH = false;
           player.status = room.status === 'inProgress' ? 'waitingNextGameToEnter' : 'inGame';
+          room.ensureValidOwner();
           room.broadcast();
         }
+        break;
+
+      case 'TSG': // Toggle Stop Game on Next Hand
+        room.enqueuedStop = Boolean(data.decision);
+        room.broadcast();
         break;
 
       case 'QNH': // Leave seat next hand (or immediately if waiting)

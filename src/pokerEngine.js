@@ -304,7 +304,7 @@ class PokerGameRoom {
       sAHWBF: true,
       sPM: false,
       sS: 'n',
-      autoTrimExcessBets: true,
+      autoTrimExcessBets: false,
       recordChatForReplay: true,
       allowStandaloneRebuy: true,
       bombPot: false,
@@ -388,6 +388,60 @@ class PokerGameRoom {
     return found ? found[0] : null;
   }
 
+  ensureValidOwner(preferredPlayerID = null) {
+    if (this.noOwner) {
+      this.ownerID = null;
+      return;
+    }
+
+    // Whenever table is in 'waiting' state, any seated player with chips waiting for next hand should be 'inGame'
+    // so that Poker Now's showingStartGame condition (players with status === 'inGame' > 1) is satisfied.
+    if (this.status === 'waiting') {
+      for (const [, pid] of this.seats) {
+        const p = this.players[pid];
+        if (p && p.status === 'waitingNextGameToEnter' && (p.stack || 0) > 0) {
+          p.status = 'inGame';
+        }
+      }
+    }
+
+    const currentOwner = this.ownerID ? this.players[this.ownerID] : null;
+    const isCurrentOwnerSeatedHuman = Boolean(
+      currentOwner && !currentOwner.isBot && this.isPlayerSeated(this.ownerID)
+    );
+
+    if (!isCurrentOwnerSeatedHuman) {
+      if (
+        preferredPlayerID &&
+        this.players[preferredPlayerID] &&
+        !this.players[preferredPlayerID].isBot &&
+        this.isPlayerSeated(preferredPlayerID)
+      ) {
+        this.ownerID = preferredPlayerID;
+      } else {
+        const seatedHuman = this.seats
+          .map(([, pid]) => this.players[pid])
+          .find(p => p && !p.isBot);
+        if (seatedHuman) {
+          this.ownerID = seatedHuman.id;
+        } else if (
+          preferredPlayerID &&
+          this.players[preferredPlayerID] &&
+          !this.players[preferredPlayerID].isBot
+        ) {
+          this.ownerID = preferredPlayerID;
+        } else if (!currentOwner || this.ownerID === 'p_teste_owner') {
+          const anyRealHuman = Object.values(this.players).find(
+            p => p && !p.isBot && p.id !== 'p_teste_owner'
+          );
+          if (anyRealHuman) {
+            this.ownerID = anyRealHuman.id;
+          }
+        }
+      }
+    }
+  }
+
   ensurePlayerRecord(playerID, defaultName = null) {
     if (!this.players[playerID]) {
       this.players[playerID] = {
@@ -406,6 +460,7 @@ class PokerGameRoom {
     if (!this.pTB[playerID]) {
       this.pTB[playerID] = (this.configs.mTB || 10) * 1000;
     }
+    this.ensureValidOwner(playerID);
     return this.players[playerID];
   }
 
@@ -460,6 +515,7 @@ class PokerGameRoom {
     this.pTB[playerID] = (this.configs.mTB || 10) * 1000;
     this.updateLedger(playerID, cleanName, parsedStack, 0);
     this.addLog(`The player "${cleanName} @ ${playerID}" joined the game with a stack of ${parsedStack}.`);
+    this.ensureValidOwner(!isBot ? playerID : null);
     this.broadcast();
     return { ok: true };
   }
@@ -525,9 +581,19 @@ class PokerGameRoom {
     if (this.status === 'inProgress' && activePlayers.length < 2) {
       this.clearTimers();
       this.status = 'waiting';
+      this.gT = [];
+      this.pC = {};
+      this.pGS = {};
+      this.tB = {};
+      this.oTC = { '1': [] };
+      this.gameResult = null;
+      this.tHC = null;
       this.pITT = null;
       this.cPI = null;
+      this.sNA = null;
+      this.sNAA = null;
     }
+    this.ensureValidOwner();
     this.broadcast();
   }
 
@@ -538,6 +604,7 @@ class PokerGameRoom {
   }
 
   startGame() {
+    this.enqueuedStop = false;
     // Convert any waitingNextGameToEnter with stack > 0 to inGame
     for (const [, pid] of this.seats) {
       const p = this.players[pid];
@@ -561,6 +628,28 @@ class PokerGameRoom {
   startNewHand() {
     this.clearTimers();
 
+    // Apply any enqueued stack changes from owner / add-on requests
+    if (this.enqueuedStackChanges) {
+      for (const [pid, change] of Object.entries(this.enqueuedStackChanges)) {
+        const p = this.players[pid];
+        if (!p) continue;
+        const val = Math.max(0, Math.round(Number(change.stackChange) || 0));
+        if (val > 0 || change.stackChangeMode === 'set') {
+          const oldStack = p.stack || 0;
+          let newStack = oldStack;
+          if (change.stackChangeMode === 'add') newStack = oldStack + val;
+          else if (change.stackChangeMode === 'remove') newStack = Math.max(0, oldStack - val);
+          else if (change.stackChangeMode === 'set') newStack = val;
+          const diff = newStack - oldStack;
+          p.stack = newStack;
+          if (diff > 0) this.updateLedger(pid, p.name, diff, 0);
+          else if (diff < 0) this.updateLedger(pid, p.name, 0, -diff);
+          this.addLog(`The stack of "${p.name} @ ${pid}" was updated from ${oldStack} to ${newStack}.`);
+        }
+      }
+      this.enqueuedStackChanges = {};
+    }
+
     // Process pre-hand status changes (qNH, sUNH, waitingNextGameToEnter, bust outs)
     for (const [seat, pid] of [...this.seats]) {
       const p = this.players[pid];
@@ -580,13 +669,11 @@ class PokerGameRoom {
       } else if (p.status === 'waitingNextGameToEnter' && p.stack > 0) {
         p.status = 'inGame';
       }
-      if (p.stack <= 0) {
-        // Auto-rebuy so hands keep running smoothly
-        const rebuyAmt = this.bigBlind * 100;
-        p.stack = rebuyAmt;
-        p.quitCount = (p.quitCount || 0) + 1;
-        p.status = 'inGame';
-        this.updateLedger(pid, p.name, rebuyAmt, 0);
+      if ((p.stack || 0) <= 0) {
+        // NEVER auto-rebuy busted players! Set them to standingUp (Away) with 0 chips.
+        p.stack = 0;
+        p.status = 'standingUp';
+        p.sUNH = false;
       }
     }
 
@@ -594,7 +681,8 @@ class PokerGameRoom {
       .map(([seat, pid]) => ({ seat, player: this.players[pid] }))
       .filter(x => x.player && x.player.status === 'inGame' && x.player.stack > 0);
 
-    if (active.length < 2) {
+    if (this.enqueuedStop || active.length < 2) {
+      this.enqueuedStop = false;
       this.status = 'waiting';
       this.gT = [];
       this.pC = {};
@@ -607,6 +695,8 @@ class PokerGameRoom {
       this.cPI = null;
       this.sNA = null;
       this.sNAA = null;
+      this.ensureValidOwner();
+      this.syncAllLedgers();
       this.broadcast();
       return;
     }
@@ -741,14 +831,8 @@ class PokerGameRoom {
     }
 
     const p = this.players[playerID];
-    const otherMax = Math.max(
-      0,
-      ...this.iHPI
-        .filter(id => id !== playerID && this.pGS[id] !== 'fold')
-        .map(id => (this.players[id]?.stack || 0) + (typeof this.tB[id] === 'number' ? this.tB[id] : 0))
-    );
     const myTotal = (p?.stack || 0) + (typeof this.tB[playerID] === 'number' ? this.tB[playerID] : 0);
-    this.mAVTB = Math.min(myTotal, Math.max(otherMax, this.cHB));
+    this.mAVTB = Math.max(myTotal, this.cHB);
 
     const now = Date.now();
     const limitMs = (this.configs.decisionLimitTime || 20) * 1000;
@@ -859,6 +943,13 @@ class PokerGameRoom {
     const p = this.players[playerID];
     if (!p) return;
     const myBet = typeof this.tB[playerID] === 'number' ? this.tB[playerID] : 0;
+
+    // In Poker Now, when cHB === 0, the quick-action button is "Bet <BB>" and dispatches PLAYER_CALL.
+    // It must place a 1 BB bet instead of checking!
+    if (this.cHB === 0 && p.stack > 0) {
+      return this.handleRaise(playerID, myBet + Math.min(this.bigBlind, p.stack));
+    }
+
     const diff = Math.max(0, this.cHB - myBet);
     if (diff === 0) return this.handleCheck(playerID);
 
@@ -887,8 +978,15 @@ class PokerGameRoom {
     if (this.configs.autoTrimExcessBets && desired > this.mAVTB && this.mAVTB > this.cHB) {
       desired = this.mAVTB;
     }
-    if (desired > maxPossible) desired = maxPossible;
     if (desired <= this.cHB) {
+      if (maxPossible > this.cHB) {
+        desired = Math.min(maxPossible, Math.max(this.mR || (this.cHB + this.bigBlind), this.cHB + this.bigBlind));
+      } else {
+        return this.handleCall(playerID);
+      }
+    }
+    if (desired > maxPossible) desired = maxPossible;
+    if (desired <= myBet) {
       return this.handleCall(playerID);
     }
 
@@ -1067,8 +1165,34 @@ class PokerGameRoom {
     }
   }
 
+  returnUncalledBets() {
+    const contenders = this.iHPI.filter(id => this.pGS[id] !== 'fold');
+    if (contenders.length < 2) return;
+    for (const pid of contenders) {
+      const myTotal = this.totalHandBet[pid] || 0;
+      const maxOther = Math.max(
+        0,
+        ...contenders.filter(id => id !== pid).map(id => this.totalHandBet[id] || 0)
+      );
+      if (myTotal > maxOther) {
+        const excess = myTotal - maxOther;
+        const p = this.players[pid];
+        if (p) {
+          p.stack = (p.stack || 0) + excess;
+          if (this.pGS[pid] === 'allIn' && p.stack > 0) {
+            this.pGS[pid] = 'inGame';
+          }
+          this.addLog(`Uncalled bet of ${excess} returned to "${p.name} @ ${pid}"`);
+        }
+        this.totalHandBet[pid] = maxOther;
+        this.pot = Math.max(0, this.pot - excess);
+      }
+    }
+  }
+
   resolveShowdown() {
     this.clearTimers();
+    this.returnUncalledBets();
     this.cPI = null;
     this.pITT = null;
     this.gT = [1, 5]; // GAME_RESULT
@@ -1170,6 +1294,7 @@ class PokerGameRoom {
   }
 
   buildGameStateForPlayer(viewerID) {
+    this.ensureValidOwner();
     const now = Date.now();
     const pCForViewer = {};
 
@@ -1185,6 +1310,18 @@ class PokerGameRoom {
         name1RH: null,
         name2RH: null,
         prob1: null
+      };
+    }
+
+    // Poker Now frontend subtracts currentBet (tB[pid]) from player.stack when rendering the seat stack
+    // (ne.prototype.renderStack: e.stack - e.currentBet) and uses player.stack as the total street All-In value.
+    const playersForViewer = {};
+    for (const [pid, p] of Object.entries(this.players)) {
+      const currentStreetBet =
+        this.status === 'inProgress' && typeof this.tB[pid] === 'number' ? this.tB[pid] : 0;
+      playersForViewer[pid] = {
+        ...p,
+        stack: (p.stack || 0) + currentStreetBet
       };
     }
 
@@ -1227,7 +1364,8 @@ class PokerGameRoom {
       wBACPI: this.wBACPI,
       ownerID: this.ownerID,
       noOwner: this.noOwner,
-      players: this.players,
+      players: playersForViewer,
+      enqueuedStop: Boolean(this.enqueuedStop),
       version: '0.1.72',
       bigBlind: this.bigBlind,
       smallBlind: this.smallBlind,
