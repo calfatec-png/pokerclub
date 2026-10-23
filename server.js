@@ -263,9 +263,16 @@ function renderHtmlPage({ gameID, playerID, playerName }) {
   <title>${isGamePage ? 'Poker Now - Multi-Table Private Game' : 'Start a New Poker Game - Poker Now'}</title>
   <link rel="shortcut icon" href="/assets/favicon.png">
   <link href="https://fonts.googleapis.com/css?family=Montserrat:400,600,700,800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" media="all" href="/assets/vendor-41df9d3cd270fc2ef13b.css" />
-  <link rel="stylesheet" media="all" href="/assets/game-09d8e489f29e5f022a84.css" />
+  <link rel="stylesheet" media="all" href="/assets/vendor-41df9d3cd270fc2ef13b.css?v=3" />
+  <link rel="stylesheet" media="all" href="/assets/game-09d8e489f29e5f022a84.css?v=3" />
   <style>
+    /* Card font fix: "Abril Fatface" was never loaded, so iOS/Safari fell back to
+       the generic "cursive" font (Snell Roundhand) where a "Q" looks like a "2".
+       Force a clear, bold sans-serif font on every device. */
+    .card, .portrait .card, .card .value, .card .sub-suit {
+      font-family: 'Montserrat', 'Helvetica Neue', Arial, sans-serif !important;
+      font-style: normal !important;
+    }
     /* Floating PokerClub Control Dock */
     #pc-helper-dock {
       position: fixed;
@@ -492,12 +499,28 @@ function renderHtmlPage({ gameID, playerID, playerName }) {
       var rnd = Math.floor(100 + Math.random() * 900);
       window.open(window.location.origin + '/games/' + gid + '?as=amigo' + rnd, '_blank');
     }
+    // Safety net: if React ever unmounts the table (black screen), reload it automatically.
+    (function () {
+      var mc = document.getElementById('main-container');
+      var hadContent = false;
+      setInterval(function () {
+        if (!mc) return;
+        if (mc.childElementCount > 0) { hadContent = true; return; }
+        if (hadContent) {
+          var last = Number(sessionStorage.getItem('pcAutoReload') || 0);
+          if (Date.now() - last > 10000) {
+            sessionStorage.setItem('pcAutoReload', String(Date.now()));
+            window.location.reload();
+          }
+        }
+      }, 1500);
+    })();
   </script>
 
-  <script src="/assets/runtime.bundle-1b97845bfca1361c7868.js"></script>
-  <script src="/assets/vendor.bundle-a9dfaa9ff533fa41d7e8.js"></script>
-  <script src="/assets/compatibility.bundle-6cb2fb92b575bb29bd5d.js"></script>
-  <script src="/assets/game.bundle-3de25236641b161daa4a.js"></script>
+  <script src="/assets/runtime.bundle-1b97845bfca1361c7868.js?v=3"></script>
+  <script src="/assets/vendor.bundle-a9dfaa9ff533fa41d7e8.js?v=3"></script>
+  <script src="/assets/compatibility.bundle-6cb2fb92b575bb29bd5d.js?v=3"></script>
+  <script src="/assets/game.bundle-3de25236641b161daa4a.js?v=3"></script>
 </body>
 </html>`;
 }
@@ -539,7 +562,8 @@ const server = http.createServer(async (req, res) => {
         const contentType = MIME_TYPES[ext] || 'application/octet-stream';
         res.writeHead(200, {
           'Content-Type': contentType,
-          'Cache-Control': 'public, max-age=86400'
+          // JS/CSS are patched over time: always revalidate so phones get fixes immediately
+          'Cache-Control': (ext === '.js' || ext === '.css') ? 'no-cache' : 'public, max-age=86400'
         });
         fs.createReadStream(filePath).pipe(res);
         return;
@@ -983,6 +1007,19 @@ const server = http.createServer(async (req, res) => {
       const body = await readJsonBody(req);
       console.error('⚠️ [CLIENT JS ERROR REPORTED]:', JSON.stringify(body));
       sendJson(res, 200, { ok: true }, extraHeaders);
+      return;
+    }
+
+    // Gestures list must be an array: the "suggested gesture" popover (shown after a
+    // big bet / all-in) calls .map() on it and crashed the whole table when it got {}.
+    if (method === 'GET' && pathname === '/api/gestures') {
+      sendJson(res, 200, [], extraHeaders);
+      return;
+    }
+
+    // Auto chat message requests (bundle calls "undefined/auto-chat-message")
+    if (pathname.endsWith('/auto-chat-message')) {
+      sendJson(res, 200, {}, extraHeaders);
       return;
     }
 
