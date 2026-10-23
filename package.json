@@ -1,0 +1,9 @@
+{
+  "name": "pokerclub-pokernow",
+  "version": "1.0.0",
+  "description": "Poker Now Online Multiplayer Clone (Reverse-Engineered via morluto/rea)",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  }
+}
