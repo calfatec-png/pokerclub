@@ -902,8 +902,12 @@ const server = http.createServer(async (req, res) => {
       const body = await readJsonBody(req);
       Object.assign(room.configs, body);
       if (Array.isArray(body.bS) && body.bS[0]) {
-        room.smallBlind = Number(body.bS[0][0]) || room.smallBlind;
-        room.bigBlind = Number(body.bS[0][1]) || room.bigBlind;
+        // With multiple levels running, the blind clock owns the current blinds.
+        const clockRunning = room.status === 'inProgress' && room.getBlindLevels().length > 0;
+        if (!clockRunning) {
+          room.smallBlind = Number(body.bS[0][0]) || room.smallBlind;
+          room.bigBlind = Number(body.bS[0][1]) || room.bigBlind;
+        }
       }
       room.broadcast();
       sendJson(res, 200, {}, extraHeaders);

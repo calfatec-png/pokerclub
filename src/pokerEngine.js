@@ -621,8 +621,81 @@ class PokerGameRoom {
     }
 
     this.status = 'inProgress';
+    this.initBlindClock();
     this.startNewHand();
     return { ok: true };
+  }
+
+  // ---- Blind level clock (configs.bS = [[sb, bb, durationMinutes, ante], ...]) ----
+  getBlindLevels() {
+    const bS = Array.isArray(this.configs.bS) ? this.configs.bS : [];
+    if (bS.length <= 1) return [];
+    return bS;
+  }
+
+  blindLevelDurationMs(level) {
+    const mins = Number(level && level[2]);
+    return mins > 0 ? mins * 60000 : 0;
+  }
+
+  initBlindClock() {
+    const levels = this.getBlindLevels();
+    this.blindLevelIdx = 0;
+    this.blindLevelEndsAt = null;
+    if (!levels.length) return;
+    const first = levels[0];
+    this.smallBlind = Number(first[0]) || this.smallBlind;
+    this.bigBlind = Number(first[1]) || this.bigBlind;
+    const dur = this.blindLevelDurationMs(first);
+    this.blindLevelEndsAt = dur ? Date.now() + dur : null;
+  }
+
+  resetBlindClock() {
+    this.blindLevelIdx = 0;
+    this.blindLevelEndsAt = null;
+  }
+
+  // Called at the beginning of every hand: moves to the next level(s) if time is up.
+  advanceBlindLevelIfDue() {
+    const levels = this.getBlindLevels();
+    if (!levels.length) return;
+    if (this.blindLevelIdx == null) this.blindLevelIdx = 0;
+    if (!this.blindLevelEndsAt) return;
+    const now = Date.now();
+    let changed = false;
+    while (
+      this.blindLevelEndsAt &&
+      now >= this.blindLevelEndsAt &&
+      this.blindLevelIdx < levels.length - 1
+    ) {
+      const prevEnd = this.blindLevelEndsAt;
+      this.blindLevelIdx += 1;
+      const lvl = levels[this.blindLevelIdx];
+      const dur = this.blindLevelDurationMs(lvl);
+      // 'c' = never stop the countdown; otherwise countdown restarts at the hand's beginning
+      const base = this.configs.bTT === 'c' ? prevEnd : now;
+      this.blindLevelEndsAt = dur ? base + dur : null;
+      changed = true;
+    }
+    if (changed) {
+      const lvl = levels[this.blindLevelIdx];
+      if (Number(lvl[0]) > 0 && Number(lvl[1]) > 0) {
+        this.smallBlind = Number(lvl[0]);
+        this.bigBlind = Number(lvl[1]);
+        this.addLog(`The blinds are now ${this.smallBlind}/${this.bigBlind} (level ${this.blindLevelIdx + 1}).`);
+      }
+    }
+  }
+
+  getNextBlindInfo() {
+    const levels = this.getBlindLevels();
+    if (!levels.length || !this.blindLevelEndsAt) return { nB: null, nBA: null };
+    const next = levels[this.blindLevelIdx + 1];
+    if (!next) return { nB: null, nBA: null };
+    return {
+      nB: [Number(next[0]) || 0, Number(next[1]) || 0, next[2] == null ? null : Number(next[2]), next[3] == null ? null : Number(next[3])],
+      nBA: this.blindLevelEndsAt
+    };
   }
 
   startNewHand() {
@@ -683,6 +756,7 @@ class PokerGameRoom {
 
     if (this.enqueuedStop || active.length < 2) {
       this.enqueuedStop = false;
+      this.resetBlindClock();
       this.status = 'waiting';
       this.gT = [];
       this.pC = {};
@@ -702,6 +776,7 @@ class PokerGameRoom {
     }
 
     this.status = 'inProgress';
+    this.advanceBlindLevelIfDue();
     this.gN = (this.gN || 0) + 1;
     this.hI = generateId(12);
     this.gT = [1, 0]; // PRE_FLOP
@@ -1399,6 +1474,9 @@ class PokerGameRoom {
       dLTWoTB: this.dLTWoTB,
       dLTWTB: this.dLTWTB,
       uP: this.uP,
+      nB: this.getNextBlindInfo().nB,
+      nBA: this.getNextBlindInfo().nBA,
+      gB: false,
       cR: false,
       waitlistIds: this.waitlistIds,
       pre: now,
