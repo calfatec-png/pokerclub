@@ -564,10 +564,18 @@ const server = http.createServer(async (req, res) => {
       if (fs.existsSync(filePath) && fs.statSync(filePath).isFile()) {
         const ext = path.extname(filePath).toLowerCase();
         const contentType = MIME_TYPES[ext] || 'application/octet-stream';
+        // Always revalidate (ETag) so logo/table image updates show up immediately
+        const st = fs.statSync(filePath);
+        const etag = `"${st.size}-${Math.floor(st.mtimeMs)}"`;
+        if (req.headers['if-none-match'] === etag) {
+          res.writeHead(304, { 'ETag': etag, 'Cache-Control': 'no-cache' });
+          res.end();
+          return;
+        }
         res.writeHead(200, {
           'Content-Type': contentType,
-          // JS/CSS are patched over time: always revalidate so phones get fixes immediately
-          'Cache-Control': (ext === '.js' || ext === '.css') ? 'no-cache' : 'public, max-age=86400'
+          'ETag': etag,
+          'Cache-Control': 'no-cache'
         });
         fs.createReadStream(filePath).pipe(res);
         return;
