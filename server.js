@@ -249,7 +249,7 @@ function renderHtmlPage({ gameID, playerID, playerName }) {
   <base href="/">
   <meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" name="viewport">
   <meta content="notranslate" name="google">
-  <title>${isGamePage ? 'Poker Now - Multi-Table Private Game' : 'Start a New Poker Game - Poker Now'}</title>
+  <title>${isGamePage ? 'pokerSAT - Multi-Table Private Game' : 'Start a New Poker Game - pokerSAT'}</title>
   <link rel="shortcut icon" href="/assets/favicon.png">
   <link href="https://fonts.googleapis.com/css?family=Montserrat:400,600,700,800&display=swap" rel="stylesheet">
   <link rel="stylesheet" media="all" href="/assets/vendor-41df9d3cd270fc2ef13b.css?v=3" />
@@ -436,7 +436,7 @@ function renderHtmlPage({ gameID, playerID, playerName }) {
 
   <div id="pc-helper-dock">
     <button id="pc-helper-toggle" type="button" onclick="document.getElementById('pc-helper-dock').classList.toggle('open')">
-      <span>♠️ PAINEL POKER NOW</span>
+      <span>♠️ PAINEL POKERSAT</span>
       <span style="opacity:0.75;font-size:10px;">(Mesas / Bots / Temas / Amigos) ▾</span>
     </button>
     <div id="pc-helper-panel">
@@ -463,7 +463,7 @@ function renderHtmlPage({ gameID, playerID, playerName }) {
       <div class="pc-dock-section">
         <div class="pc-dock-title">Tema Visual da Mesa & Cartas</div>
         <div class="pc-dock-row">
-          <button class="pc-btn purple" type="button" onclick="pcAction('theme', { theme: 'halloween-2026' })">🎃 Halloween + Cartas PokerNow</button>
+          <button class="pc-btn purple" type="button" onclick="pcAction('theme', { theme: 'halloween-2026' })">🎃 Halloween + Cartas pokerSAT</button>
           <button class="pc-btn gold" type="button" onclick="pcAction('theme', { theme: 'fat-stack' })">🪙 Halloween + Cartas Fat Stack</button>
           <button class="pc-btn green" type="button" onclick="pcAction('theme', { theme: 'classic-green' })">🟢 Mesa Verde Clássica</button>
           <button class="pc-btn danger" type="button" onclick="pcAction('theme', { theme: 'classic-red' })">🔴 Mesa Vermelha</button>
@@ -607,7 +607,7 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
-    // 3. Poker Now Frontend REST APIs
+    // 3. pokerSAT Frontend REST APIs
     // POST /new-game (Screenshot 1 "CREATE GAME" button)
     if (method === 'POST' && pathname === '/new-game') {
       const body = await readJsonBody(req);
@@ -1075,7 +1075,7 @@ const server = http.createServer(async (req, res) => {
           designThemes: [
             {
               id: 'halloween-2026',
-              title: 'Halloween 2026 (Poker Now Cards)',
+              title: 'Halloween 2026 (pokerSAT Cards)',
               tablePreviewUrl: '/assets/hw26-felt-l.png',
               cardsPreviewUrl: '/assets/hw26-cards.png'
             },
@@ -1661,7 +1661,7 @@ function handleSocketIoEvent(client, eventName, data) {
 
 server.listen(PORT, '0.0.0.0', () => {
   console.log('============================================================');
-  console.log(`♠️  Poker Now Clone Server running on http://localhost:${PORT}`);
+  console.log(`♠️  pokerSAT Clone Server running on http://localhost:${PORT}`);
   console.log('============================================================');
   console.log(`1. Tela Criar Jogo (Img 1):    http://localhost:${PORT}/start-game`);
   console.log(`2. Mesa "teste" (Img 2 e 3):   http://localhost:${PORT}/games/pglzUG33VPJwPc1fl6t6qNeE0`);

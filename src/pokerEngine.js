@@ -323,8 +323,8 @@ class PokerGameRoom {
       {
         at: Date.now(),
         playerID: 'poker-now',
-        playerName: 'Poker Now',
-        message: 'Elevate Your Game with Poker Now Plus. Activate your Free 7-Day Trial Today!',
+        playerName: 'pokerSAT',
+        message: 'Elevate Your Game with pokerSAT Plus. Activate your Free 7-Day Trial Today!',
         autoMessage: true,
         highlight: true
       }
@@ -395,7 +395,7 @@ class PokerGameRoom {
     }
 
     // Whenever table is in 'waiting' state, any seated player with chips waiting for next hand should be 'inGame'
-    // so that Poker Now's showingStartGame condition (players with status === 'inGame' > 1) is satisfied.
+    // so that pokerSAT's showingStartGame condition (players with status === 'inGame' > 1) is satisfied.
     if (this.status === 'waiting') {
       for (const [, pid] of this.seats) {
         const p = this.players[pid];
@@ -1023,7 +1023,7 @@ class PokerGameRoom {
     if (!p) return;
     const myBet = typeof this.tB[playerID] === 'number' ? this.tB[playerID] : 0;
 
-    // In Poker Now, when cHB === 0, the quick-action button is "Bet <BB>" and dispatches PLAYER_CALL.
+    // In pokerSAT, when cHB === 0, the quick-action button is "Bet <BB>" and dispatches PLAYER_CALL.
     // It must place a 1 BB bet instead of checking!
     if (this.cHB === 0 && p.stack > 0) {
       return this.handleRaise(playerID, myBet + Math.min(this.bigBlind, p.stack));
@@ -1392,7 +1392,7 @@ class PokerGameRoom {
       };
     }
 
-    // Poker Now frontend subtracts currentBet (tB[pid]) from player.stack when rendering the seat stack
+    // pokerSAT frontend subtracts currentBet (tB[pid]) from player.stack when rendering the seat stack
     // (ne.prototype.renderStack: e.stack - e.currentBet) and uses player.stack as the total street All-In value.
     const playersForViewer = {};
     for (const [pid, p] of Object.entries(this.players)) {
@@ -1506,7 +1506,7 @@ class PokerGameRoom {
       ...theme,
       club: this.clubID
         ? {
-            name: 'Poker Now Lounge',
+            name: 'pokerSAT Lounge',
             slug: 'lounge',
             disableGestureSuggestion: false,
             currentPlayerUsername: 'Player',
