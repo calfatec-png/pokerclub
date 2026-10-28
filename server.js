@@ -902,6 +902,10 @@ const server = http.createServer(async (req, res) => {
       const body = await readJsonBody(req);
       Object.assign(room.configs, body);
       if (Array.isArray(body.bS) && body.bS[0]) {
+        // If the schedule changes while a game is running, restart the blind clock.
+        if (room.status === 'inProgress' && Array.isArray(body.bS) && body.bS.length > 1) {
+          room.initBlindClock();
+        }
         // With multiple levels running, the blind clock owns the current blinds.
         const clockRunning = room.status === 'inProgress' && room.getBlindLevels().length > 0;
         if (!clockRunning) {
@@ -1590,6 +1594,10 @@ function handleSocketIoEvent(client, eventName, data) {
         break;
 
       case 'UR': // Resume game
+        // Time spent paused does not count against the blind level
+        if (room.uP && room.blindLevelEndsAt) {
+          room.blindLevelEndsAt += Date.now() - room.uP;
+        }
         room.uP = false;
         if (room.status === 'inProgress' && room.pITT) {
           room.setTurnPlayer(room.pITT);

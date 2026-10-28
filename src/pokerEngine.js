@@ -642,6 +642,7 @@ class PokerGameRoom {
     const levels = this.getBlindLevels();
     this.blindLevelIdx = 0;
     this.blindLevelEndsAt = null;
+    this.blindClockStarted = true;
     if (!levels.length) return;
     const first = levels[0];
     this.smallBlind = Number(first[0]) || this.smallBlind;
@@ -653,12 +654,15 @@ class PokerGameRoom {
   resetBlindClock() {
     this.blindLevelIdx = 0;
     this.blindLevelEndsAt = null;
+    this.blindClockStarted = false;
   }
 
   // Called at the beginning of every hand: moves to the next level(s) if time is up.
   advanceBlindLevelIfDue() {
     const levels = this.getBlindLevels();
     if (!levels.length) return;
+    // Levels configured after the game already started: start the clock now.
+    if (!this.blindClockStarted) this.initBlindClock();
     if (this.blindLevelIdx == null) this.blindLevelIdx = 0;
     if (!this.blindLevelEndsAt) return;
     const now = Date.now();
