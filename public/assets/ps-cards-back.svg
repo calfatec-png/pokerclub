@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 336" width="240" height="336">
+  <defs>
+    <linearGradient id="psRedGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#c42424"/>
+      <stop offset="50%" stop-color="#9b1717"/>
+      <stop offset="100%" stop-color="#6e0d0d"/>
+    </linearGradient>
+    <pattern id="psLattice" width="24" height="24" patternUnits="userSpaceOnUse">
+      <path d="M 12,0 L 24,12 L 12,24 L 0,12 Z" fill="none" stroke="#ffffff" stroke-opacity="0.14" stroke-width="1.2"/>
+      <circle cx="12" cy="12" r="2.2" fill="#ffffff" fill-opacity="0.12"/>
+    </pattern>
+  </defs>
+  <!-- Outer White Card Border -->
+  <rect x="2" y="2" width="236" height="332" rx="18" ry="18" fill="#f8fafc" stroke="#cbd5e1" stroke-width="2"/>
+  <!-- Inner Crimson Red Back -->
+  <rect x="14" y="14" width="212" height="308" rx="10" ry="10" fill="url(#psRedGrad)"/>
+  <!-- Geometric Lattice Pattern -->
+  <rect x="14" y="14" width="212" height="308" rx="10" ry="10" fill="url(#psLattice)"/>
+  <!-- Inner Gold/White Filigree Frame -->
+  <rect x="22" y="22" width="196" height="292" rx="6" ry="6" fill="none" stroke="#ffffff" stroke-opacity="0.32" stroke-width="1.5"/>
+  <!-- Center Spade Medallion -->
+  <circle cx="120" cy="168" r="34" fill="#630b0b" stroke="#ffffff" stroke-opacity="0.38" stroke-width="2"/>
+  <path d="M120 144 C112 156, 98 164, 98 175 C98 182, 104 186, 111 186 C115 186, 118 184, 119 182 L115 193 L125 193 L121 182 C122 184, 125 186, 129 186 C136 186, 142 182, 142 175 C142 164, 128 156, 120 144 Z" fill="#ffffff" fill-opacity="0.88"/>
+  <polygon points="120,162 122.5,168 129,168.5 124,173 125.5,179 120,175.5 114.5,179 116,173 111,168.5 117.5,168" fill="#b91c1c"/>
+</svg>
+

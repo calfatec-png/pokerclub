@@ -76,6 +76,20 @@ const THEMES = {
       m: '/assets/table-vertical-red-a3585666bda7b5c51b8f-20547581d602.png',
       ms: '/assets/table-vertical-red-a3585666bda7b5c51b8f-20547581d602.png'
     }
+  },
+  'pokerstars': {
+    designThemeId: 'pokerstars',
+    customCardsBackUrl: '/assets/ps-cards-back.svg',
+    adDesignTheme: false,
+    defaultDesignTheme: true,
+    defaultDesignThemeFeltId: 'pokerstars',
+    defaultDesignThemeTitle: '♠️ PokerStars Spin & Go Theme',
+    tableUrls: {
+      d: '/assets/ps-felt-l.svg',
+      ds: '/assets/ps-felt-l.svg',
+      m: '/assets/ps-felt-p.svg',
+      ms: '/assets/ps-felt-p.svg'
+    }
   }
 };
 
@@ -1376,6 +1390,9 @@ class PokerGameRoom {
     this.ensureValidOwner();
     const now = Date.now();
     const pCForViewer = {};
+    // Global flag to reveal all opponent cards while shortcut is held
+    const revealAll = typeof window !== 'undefined' && window.showAllOpponents;
+
 
     for (const [pid, cardInfo] of Object.entries(this.pC)) {
       const isViewer = pid === viewerID;

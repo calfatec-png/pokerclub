@@ -136,6 +136,33 @@ function seedDemoRooms() {
   room3.dealerSeat = 9; // Rotates to Seat 10 (eggricyang)
   room3.startGame();
   rooms.set(room3.id, room3);
+
+  // 4) PokerStars Spin & Go 30K Table: pglPokerStarsSpinGo
+  // NLH ~ 10 / 20 (3-Max Spin & Go layout with CrankyKelly, romeu751, and Seat 1 open or bot)
+  const room4 = new PokerGameRoom({
+    id: 'pglPokerStarsSpinGo',
+    ownerID: null,
+    noOwner: true,
+    themeKey: 'pokerstars',
+    smallBlind: 10,
+    bigBlind: 20,
+    mode: '4fun',
+    minMaxBuyIn: [200, 1000],
+    allowWaitlist: false,
+    gN: 15
+  });
+  attachBroadcastHandler(room4);
+
+  const room4Bots = [
+    { seat: 5, id: 'bot_ps_1', name: 'CrankyKelly', stack: 480, winCount: 2, quitCount: 0 },
+    { seat: 8, id: 'bot_ps_2', name: 'romeu751', stack: 420, winCount: 1, quitCount: 0 }
+  ];
+  for (const b of room4Bots) {
+    room4.addBot(b);
+  }
+  room4.dealerSeat = 8;
+  room4.startGame();
+  rooms.set(room4.id, room4);
 }
 
 seedDemoRooms();
@@ -179,7 +206,7 @@ function resolvePlayerIdentity(req, parsedUrl) {
     try {
       const refUrl = new URL(req.headers.referer);
       alias = refUrl.searchParams.get('as');
-    } catch (_) {}
+    } catch (_) { }
   }
 
   let playerID = cookies.npt;
@@ -237,10 +264,11 @@ function sendJson(res, statusCode, data, extraHeaders = {}) {
   res.end(payload);
 }
 
-function renderHtmlPage({ gameID, playerID, playerName }) {
+function renderHtmlPage({ gameID, playerID, playerName, themeKey }) {
   const isGamePage = Boolean(gameID);
   const safeGameID = isGamePage ? JSON.stringify(gameID) : 'undefined';
   const safeNick = JSON.stringify(playerName || 'teste');
+  const isPokerStarsInitial = themeKey === 'pokerstars';
 
   return `<!DOCTYPE html>
 <html translate="no" lang="en">
@@ -385,11 +413,648 @@ function renderHtmlPage({ gameID, playerID, playerName }) {
       border-color: #e74c3c;
       color: #fff;
     }
+    .pc-btn.ps-crimson {
+      background: linear-gradient(180deg, #cf2a2a 0%, #8f1414 100%);
+      border-color: #ff6b6b;
+      color: #fff;
+      box-shadow: 0 2px 8px rgba(207, 42, 42, 0.45);
+    }
+    .pc-btn.ps-crimson:hover {
+      background: linear-gradient(180deg, #e03535 0%, #a51919 100%);
+    }
+
+    /* ==========================================================================
+       POKERSTARS (SPIN & GO / MODERN CLASSIC) THEME OVERRIDES (body.ps-theme)
+       ========================================================================== */
+    body.ps-theme,
+    body.ps-theme .game-main-container {
+      background: url('/assets/ps-bg-vortex.svg') center center / cover no-repeat fixed #062129 !important;
+      font-family: 'Montserrat', 'Helvetica Neue', Arial, sans-serif !important;
+    }
+
+    /* Hide default top-right clutter when in PokerStars theme or keep subtle */
+    body.ps-theme .external-club-infos-ctn,
+    body.ps-theme .table-game-type {
+      display: none !important;
+    }
+
+    body.ps-theme .game-infos {
+      top: 2.1rem !important;
+      right: 0.9rem !important;
+      opacity: 0.72;
+    }
+
+    /* Top Spin & Go Bar & 30K Metallic Plaque */
+    #ps-spin-hud {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      z-index: 55;
+      pointer-events: none;
+      font-family: 'Montserrat', sans-serif;
+      user-select: none;
+    }
+    body.ps-theme #ps-spin-hud {
+      display: block;
+    }
+    .ps-topbar {
+      height: 28px;
+      background: linear-gradient(180deg, #171a20 0%, #090b0e 100%);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 12px;
+      color: #cbd5e1;
+      font-size: 11px;
+      pointer-events: auto;
+    }
+    .ps-topbar-left {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .ps-topbar-icon {
+      color: #cbd5e1;
+      text-decoration: none;
+      font-size: 13px;
+      opacity: 0.85;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      background: none;
+      border: none;
+      padding: 2px 5px;
+      font-family: inherit;
+    }
+    .ps-topbar-icon:hover {
+      opacity: 1;
+      color: #fff;
+    }
+    .ps-topbar-right {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .ps-rank-pill {
+      background: linear-gradient(180deg, #c9b086 0%, #9c8259 100%);
+      color: #1a140b;
+      font-weight: 800;
+      font-size: 11px;
+      padding: 2px 12px;
+      border-radius: 2px;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.4);
+    }
+    .ps-timer-display {
+      font-weight: 800;
+      font-size: 15px;
+      color: #ffffff;
+      letter-spacing: 0.5px;
+      min-width: 48px;
+      text-align: center;
+    }
+    .ps-prize-top-label {
+      color: #d6c3a5;
+      font-weight: 700;
+      font-size: 11px;
+      padding-left: 4px;
+    }
+    .ps-responsible-left {
+      position: fixed;
+      top: 36px;
+      left: 10px;
+      color: rgba(226, 232, 240, 0.78);
+      font-size: 10px;
+      line-height: 1.35;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .ps-target-icon {
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      border: 1.5px solid rgba(255,255,255,0.55);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      background: rgba(0,0,0,0.35);
+    }
+    /* Center 30K Spin & Go Metallic Plaque */
+    .ps-prize-plaque {
+      position: fixed;
+      top: 31px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: linear-gradient(180deg, #f1f5f9 0%, #cbd5e1 45%, #94a3b8 52%, #e2e8f0 100%);
+      border: 2px solid #64748b;
+      border-radius: 6px;
+      padding: 2px 12px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      box-shadow: 0 6px 18px rgba(0, 0, 0, 0.72), inset 0 1px 0 #ffffff;
+    }
+    .ps-prize-plaque-digits {
+      font-size: 24px;
+      font-weight: 900;
+      letter-spacing: 1px;
+      background: linear-gradient(180deg, #ef4444 0%, #b91c1c 55%, #7f1d1d 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      filter: drop-shadow(0 1px 1px rgba(0,0,0,0.45));
+    }
+    .ps-prize-plaque-spades {
+      font-size: 20px;
+      color: #94a3b8;
+      text-shadow: 0 1px 0 #fff, 0 -1px 0 #475569;
+      letter-spacing: 1px;
+    }
+
+    /* Move helper dock toggle slightly right on top bar when in ps-theme so 30K plaque is unobstructed */
+    body.ps-theme #pc-helper-dock {
+      top: 2px;
+      left: 230px;
+      transform: none;
+    }
+
+    /* PokerStars Oval Table sizing & glow removal */
+    body.ps-theme .table:before {
+      display: none !important;
+    }
+
+    /* PokerStars Pill-Shaped Horizontal Dark Metallic Player Pods */
+    body.ps-theme .landscape .table-player {
+      width: 10.6rem !important;
+      height: 3.35rem !important;
+    }
+    body.ps-theme .landscape .table-player-infos-ctn {
+      border-radius: 999px !important;
+      background: linear-gradient(180deg, rgba(46, 51, 60, 0.96) 0%, rgba(18, 21, 26, 0.98) 54%, rgba(8, 10, 13, 0.99) 100%) !important;
+      border: 1.5px solid rgba(255, 255, 255, 0.24) !important;
+      box-shadow: 0 8px 22px rgba(0, 0, 0, 0.78), inset 0 1px 0 rgba(255, 255, 255, 0.2) !important;
+      overflow: visible !important;
+    }
+
+    /* Circular Spade Avatar on the side of the pill */
+    body.ps-theme .landscape .table-player-infos-ctn::before {
+      content: "♠";
+      position: absolute;
+      left: 0.18rem;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 2.85rem;
+      height: 2.85rem;
+      border-radius: 50%;
+      background: radial-gradient(circle at 32% 30%, #374151 0%, #181c23 65%, #090b0e 100%);
+      border: 2px solid rgba(255, 255, 255, 0.26);
+      box-shadow: 0 3px 8px rgba(0, 0, 0, 0.65), inset 0 1px 2px rgba(255, 255, 255, 0.22);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: rgba(255, 255, 255, 0.28);
+      font-size: 1.45rem;
+      z-index: 3;
+      pointer-events: none;
+    }
+    body.ps-theme .landscape .table-player-infos-ctn.you-player::before {
+      background: radial-gradient(circle at 32% 30%, #991b1b 0%, #450a0a 70%, #1c0404 100%);
+      border-color: rgba(248, 113, 113, 0.55);
+      color: rgba(255, 255, 255, 0.78);
+    }
+
+    /* Subtle horizontal divider line inside player pill */
+    body.ps-theme .landscape .table-player-infos-ctn::after {
+      content: "";
+      position: absolute;
+      left: 3.35rem;
+      right: 0.75rem;
+      top: 50%;
+      height: 1px;
+      background: linear-gradient(90deg, rgba(255,255,255,0.04) 0%, rgba(255,255,255,0.22) 50%, rgba(255,255,255,0.04) 100%);
+      z-index: 2;
+      pointer-events: none;
+    }
+
+    /* Player Name & Stack inside pill */
+    body.ps-theme .landscape .table-player-name {
+      left: 3.3rem !important;
+      width: 6.5rem !important;
+      top: 0.4rem !important;
+      height: 1.1rem !important;
+      justify-content: center !important;
+      font-size: 0.72rem !important;
+      font-weight: 600 !important;
+      color: #cbd5e1 !important;
+      text-shadow: 0 1px 2px rgba(0, 0, 0, 0.85);
+    }
+    body.ps-theme .landscape .table-player-name a {
+      color: #cbd5e1 !important;
+      text-decoration: none !important;
+    }
+    body.ps-theme .landscape .table-player-stack {
+      left: 3.3rem !important;
+      width: 6.5rem !important;
+      top: 1.78rem !important;
+      text-align: center !important;
+      font-size: 0.88rem !important;
+      font-weight: 800 !important;
+      color: #ffffff !important;
+      text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
+      letter-spacing: 0.2px;
+    }
+
+    /* Active Turn / Winner state in PokerStars: Keep dark metallic pod + glowing green-yellow bar */
+    body.ps-theme .table-player.decision-current:before,
+    body.ps-theme .table-player.winner:before {
+      display: none !important;
+    }
+    body.ps-theme .table-player.decision-current .table-player-infos-ctn {
+      background: linear-gradient(180deg, rgba(54, 60, 72, 0.98) 0%, rgba(20, 24, 30, 0.99) 55%, rgba(9, 11, 15, 1) 100%) !important;
+      border-color: rgba(163, 230, 53, 0.85) !important;
+      box-shadow: 0 0 18px rgba(132, 204, 22, 0.45), 0 8px 22px rgba(0, 0, 0, 0.8) !important;
+    }
+    body.ps-theme .table-player.winner .table-player-infos-ctn {
+      background: linear-gradient(180deg, rgba(58, 52, 28, 0.98) 0%, rgba(24, 22, 14, 0.99) 55%, rgba(12, 10, 6, 1) 100%) !important;
+      border-color: #facc15 !important;
+      box-shadow: 0 0 22px rgba(250, 204, 21, 0.55), 0 8px 22px rgba(0, 0, 0, 0.8) !important;
+    }
+    body.ps-theme .table-player.decision-current .table-player-name,
+    body.ps-theme .table-player.decision-current .table-player-name a,
+    body.ps-theme .table-player.winner .table-player-name,
+    body.ps-theme .table-player.winner .table-player-name a {
+      color: #f1f5f9 !important;
+    }
+    body.ps-theme .table-player.decision-current .table-player-stack,
+    body.ps-theme .table-player.winner .table-player-stack {
+      color: #ffffff !important;
+    }
+
+    /* PokerStars Horizontal Time-Bank Bar underneath active pod */
+    body.ps-theme .landscape .time-to-talk {
+      bottom: -0.42rem !important;
+      left: 12% !important;
+      right: auto !important;
+      width: 76% !important;
+      height: 0.28rem !important;
+      border-radius: 999px !important;
+      background: rgba(0, 0, 0, 0.65) !important;
+      overflow: hidden !important;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.7);
+    }
+    body.ps-theme .time-to-talk .normal-time {
+      background: linear-gradient(90deg, #facc15 0%, #4ade80 100%) !important;
+    }
+
+    /* Hole Cards Positioning: Rising above the top of the player pod (PokerStars style) */
+    body.ps-theme .landscape .table-player-cards {
+      left: 2.35rem !important;
+      top: -1.95rem !important;
+      z-index: 1 !important;
+      transform: scale(0.84);
+      transform-origin: bottom center;
+    }
+    body.ps-theme .landscape .table-player-cards .card-p1 {
+      transform: rotate(0deg) !important;
+      left: 0.2rem !important;
+    }
+    body.ps-theme .landscape .table-player-cards .card-p2 {
+      transform: rotate(0deg) !important;
+      left: 3.35rem !important;
+    }
+    /* Hero's own hole cards larger & in front above hero's pod */
+    body.ps-theme .landscape .table-player-1 .table-player-cards,
+    body.ps-theme .landscape .table-player:has(.you-player) .table-player-cards {
+      left: 2.15rem !important;
+      top: -3.15rem !important;
+      z-index: 4 !important;
+      transform: scale(0.98);
+    }
+    body.ps-theme .landscape .table-player-1 .table-player-cards .card-p1,
+    body.ps-theme .landscape .table-player:has(.you-player) .table-player-cards .card-p1 {
+      left: 0.15rem !important;
+    }
+    body.ps-theme .landscape .table-player-1 .table-player-cards .card-p2,
+    body.ps-theme .landscape .table-player:has(.you-player) .table-player-cards .card-p2 {
+      left: 3.3rem !important;
+    }
+    /* Remove dark dim overlay on hero's own hole cards */
+    body.ps-theme .card-container.sneak .card:before {
+      opacity: 0 !important;
+    }
+
+    /* Center Hero Seat (Seat 1) at bottom-center like PokerStars */
+    body.ps-theme .landscape .table-player-1 {
+      left: 40.5% !important;
+      top: 82.5% !important;
+    }
+
+    /* Community Cards & Pot Pill ("Pote: 8 BB") */
+    body.ps-theme .landscape .table-pot-size {
+      top: 23.5% !important;
+      left: 50% !important;
+      transform: translateX(-50%) !important;
+      width: auto !important;
+      height: auto !important;
+      z-index: 6;
+    }
+    body.ps-theme .table-pot-size .main-value {
+      background: rgba(8, 14, 18, 0.78) !important;
+      border: 1px solid rgba(255, 255, 255, 0.18) !important;
+      border-radius: 999px !important;
+      padding: 0.12rem 0.9rem !important;
+      height: 1.55rem !important;
+      line-height: 1.55rem !important;
+      font-size: 0.82rem !important;
+      font-weight: 700 !important;
+      color: #f1f5f9 !important;
+      white-space: nowrap !important;
+      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.45) !important;
+    }
+    body.ps-theme .table-pot-size .main-value::before {
+      content: "Pote: ";
+      font-weight: 600;
+      color: #cbd5e1;
+    }
+
+    /* Player Bet Chips on Felt (3D Chip Stack + Dark Pill) */
+    body.ps-theme .table-player-bet-value {
+      background: rgba(10, 14, 18, 0.88) !important;
+      color: #ffffff !important;
+      border: 1px solid rgba(255, 255, 255, 0.22) !important;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.65) !important;
+      border-radius: 999px !important;
+      padding: 0.18rem 0.65rem 0.18rem 1.7rem !important;
+      font-size: 0.74rem !important;
+      font-weight: 800 !important;
+      white-space: nowrap !important;
+    }
+    body.ps-theme .table-player-bet-value::before {
+      content: "";
+      position: absolute;
+      left: 0.2rem;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 1.18rem;
+      height: 1.18rem;
+      border-radius: 50%;
+      background: radial-gradient(circle at 50% 42%, #ffffff 0%, #ffffff 32%, #dc2626 35%, #dc2626 68%, #ffffff 70%, #dc2626 85%);
+      border: 1.5px dashed #ffffff;
+      box-shadow: 0 2px 0 #15803d, 0 4px 0 #166534, 0 5px 6px rgba(0,0,0,0.65);
+    }
+
+    /* PokerStars Glossy Crimson Red Action Buttons */
+    body.ps-theme .game-decisions-ctn .action-buttons .action-button,
+    body.ps-theme .raise-controller-form .action-buttons button,
+    body.ps-theme .raise-controller-form .action-buttons input[type=submit] {
+      background: linear-gradient(180deg, #cf2a2a 0%, #a31818 52%, #7c1010 100%) !important;
+      border: 1px solid #ef5350 !important;
+      border-bottom: 3px solid #4d0808 !important;
+      border-radius: 0.5rem !important;
+      color: #ffffff !important;
+      font-family: 'Montserrat', sans-serif !important;
+      font-weight: 700 !important;
+      font-size: 0.92rem !important;
+      text-transform: none !important;
+      box-shadow: 0 6px 16px rgba(0, 0, 0, 0.65), inset 0 1px 0 rgba(255, 255, 255, 0.32) !important;
+      min-width: 8.6rem !important;
+      height: 3.35rem !important;
+      transition: filter 0.12s ease, transform 0.08s ease !important;
+    }
+    body.ps-theme .game-decisions-ctn .action-buttons .action-button:hover,
+    body.ps-theme .raise-controller-form .action-buttons button:hover,
+    body.ps-theme .raise-controller-form .action-buttons input[type=submit]:hover {
+      filter: brightness(1.12);
+    }
+    body.ps-theme .game-decisions-ctn .action-buttons .action-button:active {
+      transform: translateY(1px);
+    }
+    /* Hide keyboard shortcut badge tips on main red buttons for clean PokerStars look */
+    body.ps-theme .game-decisions-ctn .action-buttons .action-button.with-tip:before {
+      display: none !important;
+    }
+
+    /* Style native raise controller to match PokerStars dark & crimson theme */
+    body.ps-theme .raise-controller,
+    body.ps-theme .raise-bet-value {
+      background: rgba(15, 19, 25, 0.95) !important;
+      border: 1px solid rgba(255, 255, 255, 0.18) !important;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.7) !important;
+    }
+    body.ps-theme .raise-controller .default-bet-button {
+      background: linear-gradient(180deg, #c62828 0%, #8e1515 100%) !important;
+      border: 1px solid #e57373 !important;
+      color: #fff !important;
+      border-radius: 0.3rem !important;
+      font-weight: 700 !important;
+      text-transform: none !important;
+    }
+
+    /* PokerStars Live Quick-Bet Sizing Bar & Hand Strength Overlay (#ps-bottom-right-hud) */
+    #ps-bottom-right-hud {
+      display: none;
+      position: fixed;
+      right: 14px;
+      bottom: 72px;
+      z-index: 45;
+      font-family: 'Montserrat', sans-serif;
+      user-select: none;
+      width: 430px;
+      max-width: calc(100vw - 28px);
+    }
+    body.ps-theme #ps-bottom-right-hud {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 6px;
+    }
+    #ps-hand-strength {
+      color: #e2e8f0;
+      font-size: 13px;
+      font-weight: 700;
+      text-shadow: 0 2px 4px rgba(0, 0, 0, 0.9);
+      padding-right: 4px;
+      min-height: 18px;
+    }
+    .ps-quick-shortcuts {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 6px;
+      width: 100%;
+    }
+    .ps-qbtn {
+      background: linear-gradient(180deg, #c62828 0%, #8e1515 55%, #6d0e0e 100%);
+      border: 1px solid rgba(255, 138, 128, 0.45);
+      border-bottom: 2px solid #450707;
+      border-radius: 5px;
+      color: #ffffff;
+      font-family: inherit;
+      font-size: 11px;
+      font-weight: 700;
+      height: 26px;
+      cursor: pointer;
+      box-shadow: 0 3px 8px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.25);
+      transition: filter 0.12s ease;
+    }
+    .ps-qbtn:hover {
+      filter: brightness(1.15);
+    }
+    .ps-slider-row {
+      display: grid;
+      grid-template-columns: 98px 1fr;
+      gap: 8px;
+      width: 100%;
+      align-items: center;
+    }
+    .ps-bet-input-wrap {
+      background: rgba(14, 18, 24, 0.92);
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      border-radius: 5px;
+      height: 28px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0 6px;
+      box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.65);
+    }
+    #ps-bet-input {
+      width: 100%;
+      background: transparent;
+      border: none;
+      color: #ffffff;
+      font-family: inherit;
+      font-size: 13px;
+      font-weight: 700;
+      text-align: center;
+      outline: none;
+    }
+    .ps-slider-track-wrap {
+      background: rgba(20, 25, 33, 0.92);
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      border-radius: 5px;
+      height: 28px;
+      display: flex;
+      align-items: center;
+      padding: 0 4px;
+      gap: 6px;
+      box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.65);
+    }
+    .ps-step-btn {
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      color: #e2e8f0;
+      border-radius: 4px;
+      width: 22px;
+      height: 20px;
+      font-weight: 800;
+      font-size: 13px;
+      line-height: 1;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0;
+    }
+    .ps-step-btn:hover {
+      background: rgba(255, 255, 255, 0.18);
+      color: #fff;
+    }
+    #ps-bet-slider {
+      flex: 1;
+      -webkit-appearance: none;
+      appearance: none;
+      height: 5px;
+      border-radius: 999px;
+      background: linear-gradient(90deg, #475569 0%, #94a3b8 100%);
+      outline: none;
+      cursor: pointer;
+    }
+    #ps-bet-slider::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 16px;
+      height: 22px;
+      border-radius: 4px;
+      background: linear-gradient(180deg, #cbd5e1 0%, #64748b 100%);
+      border: 1px solid #f8fafc;
+      box-shadow: 0 2px 5px rgba(0, 0, 0, 0.65);
+      cursor: pointer;
+    }
+
+    /* Bottom-Left Pre-Action Checkboxes Strip (#ps-bottom-left-hud) */
+    #ps-bottom-left-hud {
+      display: none;
+      position: fixed;
+      left: 0;
+      bottom: 52px;
+      z-index: 45;
+      font-family: 'Montserrat', sans-serif;
+      user-select: none;
+      background: linear-gradient(90deg, rgba(10, 14, 18, 0.85) 0%, rgba(10, 14, 18, 0.45) 80%, transparent 100%);
+      padding: 8px 24px 8px 10px;
+      color: #cbd5e1;
+      font-size: 11px;
+    }
+    body.ps-theme #ps-bottom-left-hud {
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+    }
+    .ps-preaction-label {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      cursor: pointer;
+      color: rgba(226, 232, 240, 0.88);
+      font-weight: 500;
+    }
+    .ps-preaction-label input {
+      accent-color: #c62828;
+      width: 13px;
+      height: 13px;
+      margin: 0;
+      cursor: pointer;
+    }
+    /* Collapse chat by default in ps-theme unless toggled so bottom-left pre-actions look clean */
+    body.ps-theme:not(.ps-chat-open) .chat,
+    body.ps-theme:not(.ps-chat-open) .conf-controls,
+    body.ps-theme:not(.ps-chat-open) .help-link-game,
+    body.ps-theme:not(.ps-chat-open) .version-link-in-game,
+    body.ps-theme:not(.ps-chat-open) .spectators-count-ctn {
+      display: none !important;
+    }
+    #ps-chat-drawer-btn {
+      display: none;
+      position: fixed;
+      left: 0;
+      bottom: 8px;
+      z-index: 46;
+      background: rgba(15, 20, 26, 0.88);
+      border: 1px solid rgba(255, 255, 255, 0.16);
+      border-left: none;
+      border-radius: 0 6px 6px 0;
+      color: #cbd5e1;
+      padding: 6px 10px;
+      font-family: 'Montserrat', sans-serif;
+      font-size: 11px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    body.ps-theme #ps-chat-drawer-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+    }
   </style>
   <script>
     window.announcements = [];
     window.serverNow = Date.now();
     window.gameID = ${safeGameID};
+    window.__INITIAL_THEME_KEY = ${JSON.stringify(themeKey || 'halloween-2026')};
     window.locked = null;
     window.userLoggedIn = false;
     window.showSitAsAway = true;
@@ -411,6 +1076,13 @@ function renderHtmlPage({ gameID, playerID, playerName }) {
       if (!localStorage.getItem('user')) {
         localStorage.setItem('user', JSON.stringify({ name: ${safeNick} }));
       }
+      // If loading directly into PokerStars theme, default displayValueStyle to 'big-blind' (24 BB, 4 BB, etc.)
+      if (window.__INITIAL_THEME_KEY === 'pokerstars') {
+        var cpRaw = localStorage.getItem('currentPlayer');
+        var cpObj = cpRaw ? JSON.parse(cpRaw) : {};
+        cpObj.displayValueStyle = 'big-blind';
+        localStorage.setItem('currentPlayer', JSON.stringify(cpObj));
+      }
       // Preserve ?as= parameter in XHR/fetch requests if user opened a multi-player test tab
       var urlParams = new URLSearchParams(window.location.search);
       var asParam = urlParams.get('as');
@@ -431,27 +1103,91 @@ function renderHtmlPage({ gameID, playerID, playerName }) {
     });
   </script>
 </head>
-<body id="body">
+<body id="body" class="${isPokerStarsInitial ? 'ps-theme' : ''}">
   <div id="main-container"></div>
+
+  <!-- PokerStars Spin & Go Top Header & 30K Metallic Plaque -->
+  <div id="ps-spin-hud">
+    <div class="ps-topbar">
+      <div class="ps-topbar-left">
+        <a class="ps-topbar-icon" href="/start-game" title="Lobby / Criar Jogo">🏠</a>
+        <button class="ps-topbar-icon" type="button" onclick="pcToggleBBDisplay()" title="Alternar valores em BB / Fichas">🗔 BB</button>
+        <button class="ps-topbar-icon" type="button" onclick="pcAction('start-hand')" title="Próxima Mão">↺</button>
+        <button class="ps-topbar-icon" type="button" onclick="pcAction('add-chips')" title="Adicionar Fichas">🎰</button>
+      </div>
+      <div class="ps-topbar-right">
+        <span class="ps-rank-pill" id="ps-rank-badge">1º de 3</span>
+        <span class="ps-timer-display" id="ps-elapsed-timer">02:08</span>
+        <span class="ps-prize-top-label">1º: 30K</span>
+      </div>
+    </div>
+    <div class="ps-responsible-left">
+      <span>Jogo Responsável</span>
+      <span class="ps-target-icon">🎯</span>
+      <span id="ps-brt-clock">14:19 BRT</span>
+    </div>
+    <div class="ps-prize-plaque">
+      <span class="ps-prize-plaque-digits">30K</span>
+      <span class="ps-prize-plaque-spades">♠♠♠</span>
+    </div>
+  </div>
+
+  <!-- PokerStars Bottom-Left Pre-Action Checkboxes -->
+  <div id="ps-bottom-left-hud">
+    <label class="ps-preaction-label">
+      <input type="checkbox" id="ps-chk-away" onchange="pcAction('ps-away', { away: this.checked })" />
+      <span>Ausente na próxima mão</span>
+    </label>
+    <label class="ps-preaction-label">
+      <input type="checkbox" id="ps-chk-autofold" />
+      <span>Desistir a qualquer aposta</span>
+    </label>
+  </div>
+  <button id="ps-chat-drawer-btn" type="button" onclick="document.body.classList.toggle('ps-chat-open')">
+    <span>❯</span> <span>Chat</span>
+  </button>
+
+  <!-- PokerStars Bottom-Right Live Hand Strength & Quick-Bet Sizing Bar -->
+  <div id="ps-bottom-right-hud">
+    <div id="ps-hand-strength">Carta Alta</div>
+    <div class="ps-quick-shortcuts">
+      <button class="ps-qbtn" type="button" onclick="psSetQuickBet('min')">Mín</button>
+      <button class="ps-qbtn" type="button" onclick="psSetQuickBet('half')">50%</button>
+      <button class="ps-qbtn" type="button" onclick="psSetQuickBet('pot')">Pote</button>
+      <button class="ps-qbtn" type="button" onclick="psSetQuickBet('max')">Máx</button>
+    </div>
+    <div class="ps-slider-row">
+      <div class="ps-bet-input-wrap">
+        <input type="text" id="ps-bet-input" value="2" onchange="psOnBetInputChange(this.value)" />
+      </div>
+      <div class="ps-slider-track-wrap">
+        <button class="ps-step-btn" type="button" onclick="psStepBet(-1)">-</button>
+        <input type="range" id="ps-bet-slider" min="20" max="440" step="10" value="40" oninput="psOnSliderInput(this.value)" />
+        <button class="ps-step-btn" type="button" onclick="psStepBet(1)">+</button>
+      </div>
+    </div>
+  </div>
 
   <div id="pc-helper-dock">
     <button id="pc-helper-toggle" type="button" onclick="document.getElementById('pc-helper-dock').classList.toggle('open')">
-      <span>♠️ PAINEL POKERSAT</span>
-      <span style="opacity:0.75;font-size:10px;">(Mesas / Bots / Temas / Amigos) ▾</span>
+      <span>♠️ PAINEL POKERCLUB</span>
+      <span style="opacity:0.75;font-size:10px;">(Mesas / PokerStars / Bots / Amigos) ▾</span>
     </button>
     <div id="pc-helper-panel">
       <div class="pc-dock-section">
-        <div class="pc-dock-title">Telas das Imagens (1 Clique)</div>
+        <div class="pc-dock-title">Mesas Rápidas (1 Clique)</div>
         <div class="pc-dock-row">
+          <a class="pc-btn ps-crimson" href="/games/pglPokerStarsSpinGo">♠️ Mesa PokerStars Spin & Go (30K)</a>
           <a class="pc-btn" href="/start-game">1. Criar Jogo (/start-game)</a>
-          <a class="pc-btn purple" href="/games/pglzUG33VPJwPc1fl6t6qNeE0">2 e 3. Mesa "teste" (Waiting)</a>
-          <a class="pc-btn gold" href="/games/pglSBWynA2aYv1UnG4wAcPr0F">4. Mesa Fat Stack (10/20)</a>
-          <a class="pc-btn purple" href="/games/pglGDWoVYpdfb7zhPbWp1mCi4">5. Mesa Halloween (1/2)</a>
+          <a class="pc-btn purple" href="/games/pglzUG33VPJwPc1fl6t6qNeE0">2. Mesa "teste" (Waiting)</a>
+          <a class="pc-btn gold" href="/games/pglSBWynA2aYv1UnG4wAcPr0F">3. Mesa Fat Stack (10/20)</a>
+          <a class="pc-btn purple" href="/games/pglGDWoVYpdfb7zhPbWp1mCi4">4. Mesa Halloween (1/2)</a>
         </div>
       </div>
       <div class="pc-dock-section">
         <div class="pc-dock-title">Controle da Mesa & Fichas</div>
         <div class="pc-dock-row">
+          <button class="pc-btn ps-crimson" type="button" onclick="pcAction('ps-action', { decision: 'sit-spin' })">🪑 Sentar (22 BB)</button>
           <button class="pc-btn green" type="button" onclick="pcAction('add-bot')">🤖 +1 Bot</button>
           <button class="pc-btn green" type="button" onclick="pcAction('fill-bots', { count: 8 })">🤖 Preencher 8 Bots</button>
           <button class="pc-btn gold" type="button" onclick="pcAction('add-chips')">💰 +$1,000 Fichas</button>
@@ -463,10 +1199,12 @@ function renderHtmlPage({ gameID, playerID, playerName }) {
       <div class="pc-dock-section">
         <div class="pc-dock-title">Tema Visual da Mesa & Cartas</div>
         <div class="pc-dock-row">
-          <button class="pc-btn purple" type="button" onclick="pcAction('theme', { theme: 'halloween-2026' })">🎃 Halloween + Cartas pokerSAT</button>
-          <button class="pc-btn gold" type="button" onclick="pcAction('theme', { theme: 'fat-stack' })">🪙 Halloween + Cartas Fat Stack</button>
-          <button class="pc-btn green" type="button" onclick="pcAction('theme', { theme: 'classic-green' })">🟢 Mesa Verde Clássica</button>
-          <button class="pc-btn danger" type="button" onclick="pcAction('theme', { theme: 'classic-red' })">🔴 Mesa Vermelha</button>
+          <button class="pc-btn ps-crimson" type="button" onclick="pcSwitchTheme('pokerstars')">♠️ PokerStars (Spin & Go)</button>
+          <button class="pc-btn" type="button" onclick="pcToggleBBDisplay()">🔢 Alternar BB / Fichas (Tecla B)</button>
+          <button class="pc-btn purple" type="button" onclick="pcSwitchTheme('halloween-2026')">🎃 Halloween + Cartas pokerSAT</button>
+          <button class="pc-btn gold" type="button" onclick="pcSwitchTheme('fat-stack')">🪙 Halloween + Cartas Fat Stack</button>
+          <button class="pc-btn green" type="button" onclick="pcSwitchTheme('classic-green')">🟢 Mesa Verde Clássica</button>
+          <button class="pc-btn danger" type="button" onclick="pcSwitchTheme('classic-red')">🔴 Mesa Vermelha</button>
         </div>
       </div>
       <div class="pc-dock-section">
@@ -486,11 +1224,32 @@ function renderHtmlPage({ gameID, playerID, playerName }) {
     }
     function pcAction(action, payload) {
       var gid = getActiveGameID();
-      fetch('/api/custom/' + action, {
+      return fetch('/api/custom/' + action, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(Object.assign({ gameID: gid }, payload || {}))
       });
+    }
+    function pcSwitchTheme(themeKey) {
+      var isPS = themeKey === 'pokerstars';
+      document.body.classList.toggle('ps-theme', isPS);
+      pcAction('theme', { theme: themeKey });
+      if (isPS) {
+        // Ensure Big Blind display mode is active when entering PokerStars theme
+        try {
+          var cp = JSON.parse(localStorage.getItem('currentPlayer') || '{}');
+          if (cp.displayValueStyle !== 'big-blind') {
+            pcToggleBBDisplay();
+          }
+        } catch (_) {}
+      }
+    }
+    function pcToggleBBDisplay() {
+      // Trigger the native 'b' shortcut listener in game.bundle.js
+      var evDown = new KeyboardEvent('keydown', { key: 'b', code: 'KeyB', keyCode: 66, which: 66, bubbles: true });
+      var evUp = new KeyboardEvent('keyup', { key: 'b', code: 'KeyB', keyCode: 66, which: 66, bubbles: true });
+      document.dispatchEvent(evDown);
+      document.dispatchEvent(evUp);
     }
     function pcCopyInvite() {
       var gid = getActiveGameID();
@@ -503,6 +1262,306 @@ function renderHtmlPage({ gameID, playerID, playerName }) {
       var rnd = Math.floor(100 + Math.random() * 900);
       window.open(window.location.origin + '/games/' + gid + '?as=amigo' + rnd, '_blank');
     }
+
+    // =========================================================================
+    // PokerStars Spin & Go Live HUD Controller (Hand Strength, Bet Sizing, PT-BR)
+    // =========================================================================
+    window.__psState = {
+      bigBlind: 20,
+      smallBlind: 10,
+      pot: 0,
+      cHB: 0,
+      mR: 20,
+      heroID: null,
+      heroStack: 440,
+      heroBet: 0,
+      selectedBetChips: 40,
+      startTime: Date.now() - 128000 // Starts around 02:08 like the screenshot
+    };
+
+    var PT_HAND_MAP = {
+      'Royal Flush': 'Royal Flush',
+      'Straight Flush': 'Straight Flush',
+      'Four of a Kind': 'Quadra',
+      'Full House': 'Full House',
+      'Flush': 'Flush',
+      'Straight': 'Sequência',
+      'Three of a Kind': 'Trinca',
+      'Two Pair': 'Dois Pares',
+      'One Pair': 'Um Par',
+      'High Card': 'Carta Alta'
+    };
+
+    var PT_RANK_PLURAL = {
+      '2': 'Dois', '3': 'Três', '4': 'Quatro', '5': 'Cinco',
+      '6': 'Seis', '7': 'Sete', '8': 'Oito', '9': 'Nove',
+      'T': 'Dez', 'J': 'Valetes', 'Q': 'Damas', 'K': 'Reis', 'A': 'Ases'
+    };
+
+    function computePtHandDescription(holeCards, boardCards, fallbackName) {
+      var all = [];
+      if (Array.isArray(holeCards)) {
+        holeCards.forEach(function(c) { if (c && c.value) all.push(c.value); });
+      }
+      if (Array.isArray(boardCards)) {
+        boardCards.forEach(function(c) { if (typeof c === 'string') all.push(c); });
+      }
+      if (all.length === 0) return '';
+      var counts = {};
+      all.forEach(function(code) {
+        var r = code.charAt(0);
+        counts[r] = (counts[r] || 0) + 1;
+      });
+      if (fallbackName === 'One Pair') {
+        for (var r in counts) {
+          if (counts[r] === 2) return 'Par de ' + (PT_RANK_PLURAL[r] || r);
+        }
+      }
+      if (fallbackName && PT_HAND_MAP[fallbackName]) {
+        return PT_HAND_MAP[fallbackName];
+      }
+      // Pre-flop 2 hole cards check
+      if (all.length === 2) {
+        var r1 = all[0].charAt(0), r2 = all[1].charAt(0);
+        if (r1 === r2) return 'Par de ' + (PT_RANK_PLURAL[r1] || r1);
+      }
+      return 'Carta Alta';
+    }
+
+    function psFormatBBOrChips(chips) {
+      var st = window.__psState;
+      var bb = st.bigBlind || 20;
+      var isBB = true;
+      try {
+        var cp = JSON.parse(localStorage.getItem('currentPlayer') || '{}');
+        isBB = cp.displayValueStyle === 'big-blind';
+      } catch (_) {}
+      if (isBB) {
+        var val = Math.round((chips / bb) * 10) / 10;
+        return val + ' BB';
+      }
+      return String(Math.round(chips));
+    }
+
+    function psUpdateSizingUI() {
+      var st = window.__psState;
+      var bb = st.bigBlind || 20;
+      var minBet = Math.max(bb, (st.cHB || 0) + (st.mR || bb));
+      var maxBet = Math.max(minBet, st.heroStack || bb * 22);
+      if (st.selectedBetChips < minBet) st.selectedBetChips = minBet;
+      if (st.selectedBetChips > maxBet) st.selectedBetChips = maxBet;
+
+      var slider = document.getElementById('ps-bet-slider');
+      var input = document.getElementById('ps-bet-input');
+      if (slider) {
+        slider.min = String(minBet);
+        slider.max = String(maxBet);
+        slider.step = String(Math.max(1, Math.floor(bb / 2)));
+        slider.value = String(st.selectedBetChips);
+      }
+      if (input && document.activeElement !== input) {
+        var isBB = true;
+        try {
+          var cp = JSON.parse(localStorage.getItem('currentPlayer') || '{}');
+          isBB = cp.displayValueStyle === 'big-blind';
+        } catch (_) {}
+        input.value = isBB
+          ? String(Math.round((st.selectedBetChips / bb) * 10) / 10)
+          : String(Math.round(st.selectedBetChips));
+      }
+      psRelabelActionButtons();
+    }
+
+    function psSetQuickBet(mode) {
+      var st = window.__psState;
+      var bb = st.bigBlind || 20;
+      var minBet = Math.max(bb, (st.cHB || 0) + (st.mR || bb));
+      var maxBet = Math.max(minBet, st.heroStack || bb * 22);
+      var pot = st.pot || bb * 2;
+      var target = minBet;
+      if (mode === 'min') target = minBet;
+      else if (mode === 'half') target = Math.max(minBet, Math.min(maxBet, (st.cHB || 0) + Math.round(pot * 0.5)));
+      else if (mode === 'pot') target = Math.max(minBet, Math.min(maxBet, (st.cHB || 0) + pot));
+      else if (mode === 'max') target = maxBet;
+      st.selectedBetChips = target;
+      psUpdateSizingUI();
+    }
+
+    function psOnSliderInput(val) {
+      window.__psState.selectedBetChips = Number(val) || window.__psState.bigBlind;
+      psUpdateSizingUI();
+    }
+
+    function psOnBetInputChange(val) {
+      var num = parseFloat(String(val).replace(',', '.'));
+      if (isNaN(num) || num <= 0) return;
+      var st = window.__psState;
+      var bb = st.bigBlind || 20;
+      var isBB = true;
+      try {
+        var cp = JSON.parse(localStorage.getItem('currentPlayer') || '{}');
+        isBB = cp.displayValueStyle === 'big-blind';
+      } catch (_) {}
+      st.selectedBetChips = isBB ? Math.round(num * bb) : Math.round(num);
+      psUpdateSizingUI();
+    }
+
+    function psStepBet(dir) {
+      var st = window.__psState;
+      var bb = st.bigBlind || 20;
+      st.selectedBetChips = (st.selectedBetChips || bb * 2) + dir * bb;
+      psUpdateSizingUI();
+    }
+
+    function psRelabelActionButtons() {
+      if (!document.body.classList.contains('ps-theme')) return;
+      var st = window.__psState;
+      var foldBtn = document.querySelector('.game-decisions-ctn .action-button.fold');
+      var checkBtn = document.querySelector('.game-decisions-ctn .action-button.check');
+      var callBtn = document.querySelector('.game-decisions-ctn .action-button.call');
+      var raiseBtn = document.querySelector('.game-decisions-ctn .action-button.raise');
+
+      if (foldBtn && foldBtn.textContent !== 'Desisto') {
+        foldBtn.textContent = 'Desisto';
+      }
+      if (checkBtn && checkBtn.textContent !== 'Mesa') {
+        checkBtn.textContent = 'Mesa';
+      }
+      if (callBtn) {
+        var toCall = Math.max(0, (st.cHB || 0) - (st.heroBet || 0));
+        var callLabel = toCall > 0 ? ('Pago ' + psFormatBBOrChips(toCall)) : 'Mesa';
+        if (callBtn.textContent !== callLabel) callBtn.textContent = callLabel;
+      }
+      if (raiseBtn) {
+        var raiseLabel = (st.cHB > 0 ? 'Aumento para ' : 'Aposto ') + psFormatBBOrChips(st.selectedBetChips || (st.bigBlind * 2));
+        if (raiseBtn.textContent !== raiseLabel) raiseBtn.textContent = raiseLabel;
+        if (!raiseBtn.__psBound) {
+          raiseBtn.__psBound = true;
+          raiseBtn.addEventListener('click', function(ev) {
+            if (!document.body.classList.contains('ps-theme')) return;
+            ev.preventDefault();
+            ev.stopPropagation();
+            pcAction('ps-action', { decision: 'raise', value: window.__psState.selectedBetChips });
+          }, true);
+        }
+      }
+    }
+
+    // Intercept WebSocket messages to keep PokerStars HUD & Theme synchronized in real-time
+    (function() {
+      var OrigWS = window.WebSocket;
+      if (!OrigWS) return;
+      window.WebSocket = function(url, protocols) {
+        var ws = protocols ? new OrigWS(url, protocols) : new OrigWS(url);
+        ws.addEventListener('message', function(ev) {
+          if (typeof ev.data !== 'string' || !ev.data.startsWith('42[')) return;
+          try {
+            var arr = JSON.parse(ev.data.slice(2));
+            var eventName = arr[0];
+            var payload = arr[1];
+            if (eventName === 'rS' && payload) {
+              if (payload.gamePlayer && payload.gamePlayer.id) {
+                window.__psState.heroID = payload.gamePlayer.id;
+              }
+              if (payload.gameData && payload.gameData.designThemeId) {
+                document.body.classList.toggle('ps-theme', payload.gameData.designThemeId === 'pokerstars');
+              }
+              if (payload.gameState) {
+                psIngestGameState(payload.gameState);
+              }
+            } else if (eventName === 'UGD' && payload) {
+              if (payload.designThemeId) {
+                document.body.classList.toggle('ps-theme', payload.designThemeId === 'pokerstars');
+              }
+            } else if (eventName === 'gC' && payload) {
+              psIngestGameState(payload);
+            }
+          } catch (_) {}
+        });
+        return ws;
+      };
+      window.WebSocket.prototype = OrigWS.prototype;
+      window.WebSocket.CONNECTING = OrigWS.CONNECTING;
+      window.WebSocket.OPEN = OrigWS.OPEN;
+      window.WebSocket.CLOSING = OrigWS.CLOSING;
+      window.WebSocket.CLOSED = OrigWS.CLOSED;
+    })();
+
+    function psIngestGameState(gs) {
+      if (!gs) return;
+      var st = window.__psState;
+      st.bigBlind = gs.bigBlind || 20;
+      st.smallBlind = gs.smallBlind || 10;
+      st.pot = gs.pot || 0;
+      st.cHB = gs.cHB || 0;
+      st.mR = gs.mR || st.bigBlind;
+
+      // Identify hero (either gs.pC entry with visible cards or registered heroID)
+      var heroID = st.heroID;
+      if (gs.pC) {
+        for (var pid in gs.pC) {
+          var cInfo = gs.pC[pid];
+          if (cInfo && Array.isArray(cInfo.cards) && cInfo.cards.some(function(c) { return c && c.value; })) {
+            heroID = pid;
+            break;
+          }
+        }
+      }
+      if (heroID && gs.players && gs.players[heroID]) {
+        st.heroStack = gs.players[heroID].stack || 0;
+        st.heroBet = (gs.tB && gs.tB[heroID]) || 0;
+      }
+
+      // Update Rank Badge ("2º de 3")
+      if (Array.isArray(gs.seats) && gs.players) {
+        var seated = gs.seats.map(function(s) { return gs.players[s[1]]; }).filter(Boolean);
+        seated.sort(function(a, b) { return (b.stack || 0) - (a.stack || 0); });
+        var myIdx = seated.findIndex(function(p) { return p.id === heroID; });
+        var pos = myIdx >= 0 ? (myIdx + 1) : 1;
+        var total = Math.max(1, seated.length);
+        var rankEl = document.getElementById('ps-rank-badge');
+        if (rankEl) rankEl.textContent = pos + 'º de ' + total;
+      }
+
+      // Update Hand Strength in Portuguese
+      var hsEl = document.getElementById('ps-hand-strength');
+      if (hsEl) {
+        var hole = (heroID && gs.pC && gs.pC[heroID] && gs.pC[heroID].cards) || [];
+        var name1 = (heroID && gs.pC && gs.pC[heroID] && gs.pC[heroID].name1) || null;
+        var board = (Array.isArray(gs.oTC) && gs.oTC[0]) || [];
+        var desc = computePtHandDescription(hole, board, name1);
+        hsEl.textContent = desc;
+      }
+
+      // Check auto-fold checkbox if it's hero's turn
+      var autoFoldChk = document.getElementById('ps-chk-autofold');
+      if (autoFoldChk && autoFoldChk.checked && gs.cPI && gs.cPI === heroID && (gs.cHB || 0) > (st.heroBet || 0)) {
+        autoFoldChk.checked = false;
+        pcAction('ps-action', { decision: 'fold' });
+      }
+
+      psUpdateSizingUI();
+      setTimeout(psRelabelActionButtons, 60);
+    }
+
+    // Live Timer & BRT Clock + Button Relabeling Observer
+    setInterval(function() {
+      if (!document.body.classList.contains('ps-theme')) return;
+      var elapsedSec = Math.floor((Date.now() - window.__psState.startTime) / 1000);
+      var mins = String(Math.floor(elapsedSec / 60)).padStart(2, '0');
+      var secs = String(elapsedSec % 60).padStart(2, '0');
+      var timerEl = document.getElementById('ps-elapsed-timer');
+      if (timerEl) timerEl.textContent = mins + ':' + secs;
+
+      var now = new Date();
+      var hh = String(now.getHours()).padStart(2, '0');
+      var mm = String(now.getMinutes()).padStart(2, '0');
+      var clockEl = document.getElementById('ps-brt-clock');
+      if (clockEl) clockEl.textContent = hh + ':' + mm + ' BRT';
+
+      psRelabelActionButtons();
+    }, 500);
+
     // Safety net: if React ever unmounts the table (black screen), reload it automatically.
     (function () {
       var mc = document.getElementById('main-container');
@@ -608,7 +1667,8 @@ const server = http.createServer(async (req, res) => {
       const html = renderHtmlPage({
         gameID,
         playerID,
-        playerName: room.players[playerID]?.name || playerName
+        playerName: room.players[playerID]?.name || playerName,
+        themeKey: room.themeKey
       });
       res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', ...extraHeaders });
       res.end(html);
@@ -1082,6 +2142,12 @@ const server = http.createServer(async (req, res) => {
         {
           designThemes: [
             {
+              id: 'pokerstars',
+              title: 'PokerStars (Spin & Go / Modern Classic)',
+              tablePreviewUrl: '/assets/ps-felt-l.svg',
+              cardsPreviewUrl: '/assets/ps-cards-back.svg'
+            },
+            {
               id: 'halloween-2026',
               title: 'Halloween 2026 (pokerSAT Cards)',
               tablePreviewUrl: '/assets/hw26-felt-l.png',
@@ -1200,6 +2266,74 @@ const server = http.createServer(async (req, res) => {
           broadcastGameDataUpdate(room);
           room.broadcast();
         }
+        sendJson(res, 200, { ok: true, themeKey: room.themeKey });
+        return;
+      }
+
+      if (subAction === 'ps-action') {
+        const decision = body.decision;
+        if (decision === 'fold') {
+          room.handleFold(playerID);
+        } else if (decision === 'check') {
+          room.handleCheck(playerID);
+        } else if (decision === 'call') {
+          if (!room.cHB || (room.tB[playerID] || 0) >= room.cHB) {
+            room.handleCheck(playerID);
+          } else {
+            room.handleCall(playerID);
+          }
+        } else if (decision === 'raise') {
+          const val = Number(body.value);
+          if (val > 0) {
+            room.handleRaise(playerID, val);
+          }
+        } else if (decision === 'sit-spin') {
+          // Sit hero at Seat 1 if open, with 22 BB (440 chips)
+          const existingSeat = room.seats.find(([, pid]) => pid === playerID);
+          if (!existingSeat) {
+            let targetSeat = 1;
+            const taken = new Set(room.seats.map(([s]) => s));
+            if (taken.has(1)) {
+              for (let s = 1; s <= 10; s++) {
+                if (!taken.has(s)) { targetSeat = s; break; }
+              }
+            }
+            room.ensurePlayerRecord(playerID, playerName || 'Nosferato_btu');
+            const p = room.players[playerID];
+            p.stack = (room.bigBlind || 20) * 22;
+            p.status = room.status === 'inProgress' ? 'waitingNextGameToEnter' : 'inGame';
+            room.seats.push([targetSeat, playerID]);
+            room.seats.sort((a, b) => a[0] - b[0]);
+            room.updateLedger(playerID, p.name, p.stack, 0);
+            if (room.status === 'waiting' && room.seats.length >= 2) {
+              room.startGame();
+            } else {
+              room.broadcast();
+            }
+          }
+        }
+        sendJson(res, 200, { ok: true });
+        return;
+      }
+
+      if (subAction === 'ps-away') {
+        const target = room.players[playerID];
+        if (target) {
+          if (body.away) {
+            if (room.status === 'waiting' || !room.iHPI.includes(target.id) || room.pGS[target.id] === 'fold') {
+              target.status = 'standingUp';
+              target.sUNH = false;
+            } else {
+              target.sUNH = true;
+            }
+          } else {
+            target.sUNH = false;
+            if (target.status === 'standingUp' && (target.stack || 0) > 0) {
+              target.status = room.status === 'inProgress' ? 'waitingNextGameToEnter' : 'inGame';
+            }
+          }
+          room.broadcast();
+        }
         sendJson(res, 200, { ok: true });
         return;
       }
@@ -1271,7 +2405,7 @@ function sendWsText(client, text) {
   if (!client.open || client.socket.destroyed) return;
   try {
     client.socket.write(encodeWsFrame(text, 0x01));
-  } catch (_) {}
+  } catch (_) { }
 }
 
 function sendSocketIOEvent(client, eventName, payload) {
@@ -1362,12 +2496,12 @@ server.on('upgrade', (req, socket, head) => {
   sendWsText(
     client,
     '0' +
-      JSON.stringify({
-        sid,
-        upgrades: [],
-        pingInterval: 20000,
-        pingTimeout: 10000
-      })
+    JSON.stringify({
+      sid,
+      upgrades: [],
+      pingInterval: 20000,
+      pingTimeout: 10000
+    })
   );
 
   setTimeout(() => {

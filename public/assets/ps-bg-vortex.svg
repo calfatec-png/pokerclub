@@ -1,0 +1,60 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1920 1080" width="1920" height="1080" preserveAspectRatio="xMidYMid slice">
+  <defs>
+    <!-- Base radial teal/cyan to dark abyss gradient -->
+    <radialGradient id="vortexBase" cx="50%" cy="48%" r="65%" fx="48%" fy="45%">
+      <stop offset="0%" stop-color="#3da5bc"/>
+      <stop offset="32%" stop-color="#237589"/>
+      <stop offset="62%" stop-color="#114654"/>
+      <stop offset="86%" stop-color="#07222b"/>
+      <stop offset="100%" stop-color="#020b0f"/>
+    </radialGradient>
+
+    <!-- Bright cyan metallic highlight gradient -->
+    <linearGradient id="cyanRay" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#88e5f7" stop-opacity="0.38"/>
+      <stop offset="50%" stop-color="#38a1b8" stop-opacity="0.16"/>
+      <stop offset="100%" stop-color="#041920" stop-opacity="0.45"/>
+    </linearGradient>
+
+    <linearGradient id="darkShadowArc" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#020c10" stop-opacity="0.65"/>
+      <stop offset="50%" stop-color="#0b313b" stop-opacity="0.25"/>
+      <stop offset="100%" stop-color="#58c4d9" stop-opacity="0.28"/>
+    </linearGradient>
+
+    <!-- Heavy edge vignette -->
+    <radialGradient id="edgeVignette" cx="50%" cy="50%" r="58%">
+      <stop offset="55%" stop-color="#000000" stop-opacity="0"/>
+      <stop offset="85%" stop-color="#000000" stop-opacity="0.52"/>
+      <stop offset="100%" stop-color="#000000" stop-opacity="0.88"/>
+    </radialGradient>
+  </defs>
+
+  <!-- Base Layer -->
+  <rect width="1920" height="1080" fill="url(#vortexBase)"/>
+
+  <!-- Sweeping Curved Vortex Blades / Swirls (PokerStars Spin & Go signature background) -->
+  <g opacity="0.85">
+    <path d="M 960,520 C 600,520 250,220 0,0 L 380,0 C 560,210 760,410 960,520 Z" fill="url(#cyanRay)"/>
+    <path d="M 960,520 C 520,620 180,450 0,240 L 0,580 C 260,670 620,660 960,520 Z" fill="url(#darkShadowArc)"/>
+    <path d="M 960,520 C 640,780 280,920 0,900 L 0,1080 L 420,1080 C 620,960 810,760 960,520 Z" fill="url(#cyanRay)"/>
+    <path d="M 960,520 C 860,820 720,980 540,1080 L 1050,1080 C 1060,900 1030,710 960,520 Z" fill="url(#darkShadowArc)"/>
+    <path d="M 960,520 C 1180,820 1480,1020 1920,1080 L 1920,760 C 1600,760 1260,680 960,520 Z" fill="url(#cyanRay)"/>
+    <path d="M 960,520 C 1340,620 1680,520 1920,340 L 1920,60 C 1620,280 1290,450 960,520 Z" fill="url(#darkShadowArc)"/>
+    <path d="M 960,520 C 1220,280 1520,80 1840,0 L 1380,0 C 1180,150 1040,340 960,520 Z" fill="url(#cyanRay)"/>
+    <path d="M 960,520 C 980,240 880,80 760,0 L 1160,0 C 1120,180 1050,350 960,520 Z" fill="url(#darkShadowArc)"/>
+  </g>
+
+  <!-- Fine Concentric Brushed Metal Swirl Lines -->
+  <g fill="none" stroke="#8be9fa" stroke-opacity="0.09" stroke-width="2">
+    <ellipse cx="960" cy="520" rx="460" ry="280" transform="rotate(-12 960 520)"/>
+    <ellipse cx="960" cy="520" rx="580" ry="350" transform="rotate(-8 960 520)"/>
+    <ellipse cx="960" cy="520" rx="710" ry="430" transform="rotate(-4 960 520)"/>
+    <ellipse cx="960" cy="520" rx="850" ry="520" transform="rotate(2 960 520)"/>
+    <ellipse cx="960" cy="520" rx="1020" ry="630" transform="rotate(7 960 520)"/>
+  </g>
+
+  <!-- Outer Dark Vignette -->
+  <rect width="1920" height="1080" fill="url(#edgeVignette)"/>
+</svg>
+
