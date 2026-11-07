@@ -1386,22 +1386,38 @@ class PokerGameRoom {
     }
   }
 
-  buildGameStateForPlayer(viewerID) {
+  isViewerResponsible(viewerID) {
+    if (!viewerID) return false;
+    this.ensureValidOwner();
+    if (this.ownerID) {
+      return this.ownerID === viewerID;
+    }
+    // Fallback for demo/lounge rooms with noOwner=true: the first non-bot human in the room is responsible
+    const firstHuman = Object.values(this.players).find(
+      p => p && !p.isBot && p.id !== 'p_teste_owner'
+    );
+    return Boolean(firstHuman && firstHuman.id === viewerID);
+  }
+
+  buildGameStateForPlayer(viewerID, forcePeekAll = false) {
     this.ensureValidOwner();
     const now = Date.now();
     const pCForViewer = {};
-    // Global flag to reveal all opponent cards while shortcut is held
-    const revealAll = typeof window !== 'undefined' && window.showAllOpponents;
-
+    const allowPeek = Boolean(forcePeekAll && this.isViewerResponsible(viewerID));
 
     for (const [pid, cardInfo] of Object.entries(this.pC)) {
       const isViewer = pid === viewerID;
+      const secret = this.holeCardsSecret && this.holeCardsSecret[pid];
       pCForViewer[pid] = {
-        cards: (cardInfo.cards || []).map(c => ({
-          value: isViewer || c.showing ? c.value : null,
-          showing: Boolean(c.showing)
-        })),
-        name1: isViewer || (cardInfo.cards || []).every(c => c.showing) ? cardInfo.name1 : null,
+        cards: (cardInfo.cards || []).map((c, idx) => {
+          const realVal = c.value || (secret && secret[idx]) || null;
+          const shouldShowValue = isViewer || c.showing || allowPeek;
+          return {
+            value: shouldShowValue ? realVal : null,
+            showing: Boolean(c.showing || (!isViewer && allowPeek))
+          };
+        }),
+        name1: isViewer || allowPeek || (cardInfo.cards || []).every(c => c.showing) ? cardInfo.name1 : null,
         name2: null,
         name1RH: null,
         name2RH: null,

@@ -38,7 +38,8 @@ function attachBroadcastHandler(room) {
   room.onBroadcast = (r) => {
     for (const client of wsClients.values()) {
       if (client.gameID === r.id && client.open) {
-        const state = r.buildGameStateForPlayer(client.playerID);
+        const canPeek = Boolean(client.teacherPeekActive && r.isViewerResponsible(client.playerID));
+        const state = r.buildGameStateForPlayer(client.playerID, canPeek);
         sendSocketIOEvent(client, 'gC', state);
       }
     }
@@ -142,7 +143,7 @@ function seedDemoRooms() {
   const room4 = new PokerGameRoom({
     id: 'pglPokerStarsSpinGo',
     ownerID: null,
-    noOwner: true,
+    noOwner: false,
     themeKey: 'pokerstars',
     smallBlind: 10,
     bigBlind: 20,
@@ -742,9 +743,44 @@ function renderHtmlPage({ gameID, playerID, playerName, themeKey }) {
     body.ps-theme .landscape .table-player:has(.you-player) .table-player-cards .card-p2 {
       left: 3.3rem !important;
     }
-    /* Remove dark dim overlay on hero's own hole cards */
-    body.ps-theme .card-container.sneak .card:before {
+    /* Remove dark dim overlay on hero's own hole cards or when teacher peek mode is active */
+    body.ps-theme .card-container.sneak .card:before,
+    body.teacher-peek-active .card-container.sneak .card:before {
       opacity: 0 !important;
+    }
+    /* When opponent cards are flipped face-up (showdown or Ctrl+Shift+5 teacher peek), bring them in front of the pod */
+    body.ps-theme .landscape .table-player-cards:has(.card-container.flipped),
+    body.teacher-peek-active.ps-theme .landscape .table-player-cards {
+      top: -3.15rem !important;
+      z-index: 5 !important;
+      transform: scale(0.95);
+    }
+
+    /* Teacher Peek Mode indicator pill (Ctrl + Shift + 5 held by table owner) */
+    #pc-teacher-peek-badge {
+      display: none;
+      position: fixed;
+      top: 42px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 99999;
+      background: linear-gradient(180deg, rgba(16, 185, 129, 0.95) 0%, rgba(5, 150, 105, 0.95) 100%);
+      color: #ffffff;
+      border: 1px solid rgba(167, 243, 208, 0.75);
+      border-radius: 999px;
+      padding: 5px 16px;
+      font-family: 'Montserrat', sans-serif;
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: 0.4px;
+      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.65);
+      pointer-events: none;
+      white-space: nowrap;
+    }
+    body.teacher-peek-active #pc-teacher-peek-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
     }
 
     /* Center Hero Seat (Seat 1) at bottom-center like PokerStars */
@@ -1217,6 +1253,8 @@ function renderHtmlPage({ gameID, playerID, playerName, themeKey }) {
     </div>
   </div>
 
+  <div id="pc-teacher-peek-badge">👁️ MODO AULA: Cartas dos Adversários Reveladas (solte qualquer tecla para ocultar)</div>
+
   <script>
     function getActiveGameID() {
       var m = window.location.pathname.match(/^\\/games\\/([a-zA-Z0-9_-]+)/);
@@ -1453,13 +1491,14 @@ function renderHtmlPage({ gameID, playerID, playerName, themeKey }) {
       if (!OrigWS) return;
       window.WebSocket = function(url, protocols) {
         var ws = protocols ? new OrigWS(url, protocols) : new OrigWS(url);
+        window.__activeGameWS = ws;
         ws.addEventListener('message', function(ev) {
           if (typeof ev.data !== 'string' || !ev.data.startsWith('42[')) return;
           try {
             var arr = JSON.parse(ev.data.slice(2));
             var eventName = arr[0];
             var payload = arr[1];
-            if (eventName === 'rS' && payload) {
+            if ((eventName === 'rS' || eventName === 'registered') && payload) {
               if (payload.gamePlayer && payload.gamePlayer.id) {
                 window.__psState.heroID = payload.gamePlayer.id;
               }
@@ -1496,9 +1535,9 @@ function renderHtmlPage({ gameID, playerID, playerName, themeKey }) {
       st.cHB = gs.cHB || 0;
       st.mR = gs.mR || st.bigBlind;
 
-      // Identify hero (either gs.pC entry with visible cards or registered heroID)
-      var heroID = st.heroID;
-      if (gs.pC) {
+      // Identify hero (prefer registered heroID or window.playerID so revealing opponent cards never overwrites heroID)
+      var heroID = st.heroID || window.playerID;
+      if (!heroID && gs.pC) {
         for (var pid in gs.pC) {
           var cInfo = gs.pC[pid];
           if (cInfo && Array.isArray(cInfo.cards) && cInfo.cards.some(function(c) { return c && c.value; })) {
@@ -1507,10 +1546,26 @@ function renderHtmlPage({ gameID, playerID, playerName, themeKey }) {
           }
         }
       }
+      st.heroID = heroID;
       if (heroID && gs.players && gs.players[heroID]) {
         st.heroStack = gs.players[heroID].stack || 0;
         st.heroBet = (gs.tB && gs.tB[heroID]) || 0;
       }
+
+      // Check if current viewer is the person responsible for the table (owner or first human in demo room)
+      var isManager = false;
+      if (gs.ownerID) {
+        isManager = (gs.ownerID === heroID);
+      } else if (gs.players) {
+        for (var pKey in gs.players) {
+          var pl = gs.players[pKey];
+          if (pl && !pl.isBot && pl.id !== 'p_teste_owner') {
+            isManager = (pl.id === heroID);
+            break;
+          }
+        }
+      }
+      st.isTableManager = isManager;
 
       // Update Rank Badge ("2º de 3")
       if (Array.isArray(gs.seats) && gs.players) {
@@ -1543,6 +1598,87 @@ function renderHtmlPage({ gameID, playerID, playerName, themeKey }) {
       psUpdateSizingUI();
       setTimeout(psRelabelActionButtons, 60);
     }
+
+    // =========================================================================
+    // Teacher / Table Owner Peek Shortcut: Hold Ctrl + Shift + 5 to reveal
+    // opponent cards; release ANY key to return to normal immediately.
+    // =========================================================================
+    (function() {
+      var peekActive = false;
+      var fiveKeyHeld = false;
+
+      function isKeyFive(e) {
+        if (!e) return false;
+        return (
+          e.code === 'Digit5' ||
+          e.code === 'Numpad5' ||
+          e.key === '5' ||
+          e.key === '%' ||
+          e.keyCode === 53 ||
+          e.keyCode === 101 ||
+          e.which === 53 ||
+          e.which === 101
+        );
+      }
+
+      function setTeacherPeek(active) {
+        if (peekActive === active) return;
+        peekActive = active;
+        window.showAllOpponents = active;
+        document.body.classList.toggle('teacher-peek-active', active);
+
+        // Send over active WebSocket for instant zero-latency flip
+        var ws = window.__activeGameWS;
+        if (ws && ws.readyState === 1) {
+          try {
+            ws.send('42' + JSON.stringify(['teacher-peek', { active: active }]));
+          } catch (_) {}
+        }
+        // Also send via REST fallback
+        pcAction('teacher-peek', { active: active });
+      }
+
+      window.addEventListener('keydown', function(e) {
+        if (isKeyFive(e)) {
+          fiveKeyHeld = true;
+        }
+        if (e.ctrlKey && e.shiftKey && (isKeyFive(e) || fiveKeyHeld)) {
+          // Only allow if viewer is table manager (server also enforces this strictly)
+          if (window.__psState && window.__psState.isTableManager === false) return;
+          e.preventDefault();
+          if (!peekActive) {
+            setTeacherPeek(true);
+          }
+        }
+      }, true);
+
+      // Releasing ANY key immediately restores normal hidden cards
+      window.addEventListener('keyup', function(e) {
+        if (isKeyFive(e)) {
+          fiveKeyHeld = false;
+        }
+        if (peekActive) {
+          fiveKeyHeld = false;
+          setTeacherPeek(false);
+        }
+      }, true);
+
+      window.addEventListener('blur', function() {
+        fiveKeyHeld = false;
+        if (peekActive) {
+          setTeacherPeek(false);
+        }
+      });
+
+      document.addEventListener('visibilitychange', function() {
+        if (document.hidden) {
+          fiveKeyHeld = false;
+          if (peekActive) {
+            setTeacherPeek(false);
+          }
+        }
+      });
+    })();
 
     // Live Timer & BRT Clock + Button Relabeling Observer
     setInterval(function() {
@@ -2337,6 +2473,22 @@ const server = http.createServer(async (req, res) => {
         sendJson(res, 200, { ok: true });
         return;
       }
+
+      if (subAction === 'teacher-peek') {
+        if (!room.isViewerResponsible(playerID)) {
+          sendJson(res, 403, { ok: false, error: 'Only the table owner can reveal opponent cards' });
+          return;
+        }
+        const active = Boolean(body.active);
+        for (const client of wsClients.values()) {
+          if (client.gameID === room.id && client.playerID === playerID && client.open) {
+            client.teacherPeekActive = active;
+            sendSocketIOEvent(client, 'gC', room.buildGameStateForPlayer(playerID, active));
+          }
+        }
+        sendJson(res, 200, { ok: true, active });
+        return;
+      }
     }
 
     if (method === 'POST' && pathname === '/api/client-error') {
@@ -2748,7 +2900,11 @@ function handleSocketIoEvent(client, eventName, data) {
         break;
 
       case 'RUP': // Request full state resync
-        sendSocketIOEvent(client, 'rup', room.buildGameStateForPlayer(playerID));
+        sendSocketIOEvent(
+          client,
+          'rup',
+          room.buildGameStateForPlayer(playerID, Boolean(client.teacherPeekActive && room.isViewerResponsible(playerID)))
+        );
         break;
 
       case 'RUE': // Request emoji resync
@@ -2758,6 +2914,13 @@ function handleSocketIoEvent(client, eventName, data) {
       default:
         break;
     }
+    return;
+  }
+
+  if (eventName === 'teacher-peek') {
+    if (!room.isViewerResponsible(playerID)) return;
+    client.teacherPeekActive = Boolean(data && data.active);
+    sendSocketIOEvent(client, 'gC', room.buildGameStateForPlayer(playerID, client.teacherPeekActive));
     return;
   }
 
